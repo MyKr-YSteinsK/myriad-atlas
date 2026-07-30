@@ -1,13 +1,12 @@
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching'
 import { registerRoute } from 'workbox-routing'
-import { getAppVersionResponse, isGetAppVersionMessage, isSkipWaitingMessage } from './pwa/service-worker-messages'
+import { getAppVersionResponse, isGetAppVersionMessage } from './pwa/service-worker-messages'
 import { CONTENT_CACHE_MESSAGES } from './pwa/cache-protocol'
 import { VersionedContentHandler } from './pwa/worker-content-handler'
+import { registerServiceWorkerLifecycle, type ServiceWorkerLifecycleRuntime } from './pwa/service-worker-lifecycle'
 
-interface ServiceWorkerRuntime {
+interface ServiceWorkerRuntime extends ServiceWorkerLifecycleRuntime {
   __WB_MANIFEST: Parameters<typeof precacheAndRoute>[0]
-  addEventListener(type: 'message', listener: (event: MessageEvent<unknown>) => void): void
-  skipWaiting(): Promise<void>
 }
 
 const serviceWorker = self as unknown as ServiceWorkerRuntime
@@ -32,9 +31,8 @@ registerRoute(
   ({ request }) => contentHandler.handle(request),
 )
 
-serviceWorker.addEventListener('message', (event) => {
+registerServiceWorkerLifecycle(serviceWorker, (event) => {
   if (isGetAppVersionMessage(event.data)) event.ports[0]?.postMessage(getAppVersionResponse())
-  if (isSkipWaitingMessage(event.data)) void serviceWorker.skipWaiting()
   if (typeof event.data === 'object' && event.data !== null && 'type' in event.data
     && (event.data.type === CONTENT_CACHE_MESSAGES.activated || event.data.type === CONTENT_CACHE_MESSAGES.rolledBack)) contentHandler.resetPointer()
 })

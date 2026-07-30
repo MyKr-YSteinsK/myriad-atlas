@@ -164,7 +164,7 @@ describe('complete knowledge download', () => {
     const storage = new MemoryCacheStorage()
     const data = await fixture()
     const activeFingerprint = 'b'.repeat(64)
-    const active = { content_version: data.manifest.content_version, manifest_fingerprint: activeFingerprint, cache_name: contentCacheName(data.manifest.content_version, activeFingerprint), activated_at: '2026-07-30T00:00:00.000Z' }
+    const active = { schema_version: 1 as const, content_version: data.manifest.content_version, manifest_fingerprint: activeFingerprint, cache_name: contentCacheName(data.manifest.content_version, activeFingerprint), activated_at: '2026-07-30T00:00:00.000Z' }
     await storage.open(active.cache_name)
     await writeActivePointer(active, storage)
     await expect(manager(storage, data.manifestText, data.responses).start()).rejects.toThrow('指纹')

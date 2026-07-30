@@ -78,6 +78,21 @@ describe('application updates', () => {
     expect(controller.getState()).toMatchObject({ status: 'update-available', error: '本地输入尚未保存，未重新加载应用。' })
   })
 
+  it('keeps the waiting worker visible when control does not arrive before the timeout', async () => {
+    const workbox = new FakeWorkbox()
+    const reload = vi.fn()
+    const controller = new AppUpdateController({ environment: productionEnvironment, createWorkbox: () => workbox, reload, getTargetVersion: async () => undefined, controlTimeoutMs: 1 })
+    controller.start()
+    await Promise.resolve()
+    workbox.waiting({ type: 'waiting', sw: {} as ServiceWorker })
+    await Promise.resolve()
+
+    await expect(controller.activateUpdate()).resolves.toBe(false)
+    expect(workbox.messageSkipWaiting).toHaveBeenCalledOnce()
+    expect(reload).not.toHaveBeenCalled()
+    expect(controller.getState()).toMatchObject({ status: 'update-available', lifecycle: 'failed' })
+  })
+
   it('keeps externally discovered waiting workers observable', async () => {
     const workbox = new FakeWorkbox()
     const controller = new AppUpdateController({ environment: productionEnvironment, createWorkbox: () => workbox, getTargetVersion: async () => undefined })

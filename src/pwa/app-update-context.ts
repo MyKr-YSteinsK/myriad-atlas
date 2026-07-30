@@ -12,7 +12,7 @@ export interface AppUpdateContextValue {
 export const AppUpdateContext = createContext<AppUpdateContextValue | undefined>(undefined)
 
 const unsupportedUpdateContext: AppUpdateContextValue = {
-  state: { status: 'unsupported', appVersion: APP_VERSION },
+  state: { status: 'unsupported', lifecycle: 'idle', appVersion: APP_VERSION },
   activateUpdate: async () => false,
   ignoreUpdate: () => undefined,
   registerFlush: () => () => undefined,

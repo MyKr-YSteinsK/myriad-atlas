@@ -3,9 +3,11 @@ import { APP_VERSION } from '../lib/content-version'
 import { basePath, PROJECT_BASE_PATH } from '../lib/base-path'
 
 export type AppUpdateStatus = 'unsupported' | 'registering' | 'ready' | 'offline-ready' | 'update-available' | 'activating' | 'error'
+export type AppUpdateLifecycle = 'idle' | 'waiting' | 'activating' | 'controlling' | 'reload-pending' | 'failed'
 
 export interface AppUpdateState {
   status: AppUpdateStatus
+  lifecycle: AppUpdateLifecycle
   appVersion: string
   targetVersion?: string
   isExternal?: boolean
@@ -75,7 +77,7 @@ export class AppUpdateController {
   private readonly reload: () => void
   private readonly controlTimeoutMs: number
   private readonly flushers = new Set<() => Promise<void>>()
-  private readonly initialState: AppUpdateState = { status: 'unsupported', appVersion: APP_VERSION }
+  private readonly initialState: AppUpdateState = { status: 'unsupported', lifecycle: 'idle', appVersion: APP_VERSION }
   private state = this.initialState
   private workbox: WorkboxLike | undefined
   private resolveControl: (() => void) | undefined
@@ -100,24 +102,28 @@ export class AppUpdateController {
 
   start(): void {
     if (!canRegisterServiceWorker(this.environment)) {
-      this.setState({ status: 'unsupported', appVersion: APP_VERSION })
+      this.setState({ status: 'unsupported', lifecycle: 'idle', appVersion: APP_VERSION })
       return
     }
-    this.setState({ status: 'registering', appVersion: APP_VERSION })
+    this.setState({ status: 'registering', lifecycle: 'idle', appVersion: APP_VERSION })
     const workbox = this.createWorkbox(basePath('sw.js'), { scope: PROJECT_BASE_PATH })
     this.workbox = workbox
     workbox.addEventListener('waiting', (event) => { void this.onWaiting(event) })
     workbox.addEventListener('activated', (event) => {
       if (!this.active || this.state.status === 'activating') return
-      this.setState({ status: event.isUpdate ? 'ready' : 'offline-ready', appVersion: APP_VERSION })
+      this.setState({ status: event.isUpdate ? 'ready' : 'offline-ready', lifecycle: 'idle', appVersion: APP_VERSION })
     })
-    workbox.addEventListener('controlling', () => this.resolveControl?.())
+    workbox.addEventListener('controlling', () => {
+      if (!this.active) return
+      if (this.state.status === 'activating') this.setState({ ...this.state, lifecycle: 'controlling' })
+      this.resolveControl?.()
+    })
     void workbox.register().then((registration) => {
       if (!this.active || this.state.status !== 'registering') return
-      this.setState({ status: 'ready', appVersion: APP_VERSION })
+      this.setState({ status: 'ready', lifecycle: 'idle', appVersion: APP_VERSION })
       if (registration?.waiting) void this.onWaiting({ type: 'waiting', sw: registration.waiting, wasWaitingBeforeRegister: true })
     }).catch(() => {
-      if (this.active) this.setState({ status: 'error', appVersion: APP_VERSION, error: '应用离线外壳注册失败；在线浏览仍可使用。' })
+      if (this.active) this.setState({ status: 'error', lifecycle: 'failed', appVersion: APP_VERSION, error: '应用离线外壳注册失败；在线浏览仍可使用。' })
     })
   }
 
@@ -127,11 +133,11 @@ export class AppUpdateController {
 
   async activateUpdate(): Promise<boolean> {
     if (this.state.status !== 'update-available' || !this.workbox) return false
-    this.setState({ ...this.state, status: 'activating', ignored: false, error: undefined })
+    this.setState({ ...this.state, status: 'activating', lifecycle: 'activating', ignored: false, error: undefined })
     try {
       for (const flush of this.flushers) await flush()
     } catch {
-      this.setState({ ...this.state, status: 'update-available', error: '本地输入尚未保存，未重新加载应用。' })
+      this.setState({ ...this.state, status: 'update-available', lifecycle: 'failed', error: '本地输入尚未保存，未重新加载应用。' })
       return false
     }
     try {
@@ -149,11 +155,12 @@ export class AppUpdateController {
       })
       if (!this.reloaded) {
         this.reloaded = true
+        this.setState({ ...this.state, lifecycle: 'reload-pending' })
         this.reload()
       }
       return true
     } catch {
-      this.setState({ ...this.state, status: 'update-available', error: '新版本未能接管当前页面；请稍后重试。' })
+      this.setState({ ...this.state, status: 'update-available', lifecycle: 'failed', error: '新版本未能接管当前页面；请稍后重试。' })
       return false
     }
   }
@@ -166,7 +173,7 @@ export class AppUpdateController {
 
   private async onWaiting(event: WorkboxLifecycleWaitingEvent): Promise<void> {
     if (!this.active || !event.sw) return
-    this.setState({ status: 'update-available', appVersion: APP_VERSION, isExternal: event.isExternal, ignored: false })
+    this.setState({ status: 'update-available', lifecycle: 'waiting', appVersion: APP_VERSION, isExternal: event.isExternal, ignored: false })
     const targetVersion = await this.getTargetVersion(event.sw).catch(() => undefined)
     if (this.active && this.state.status === 'update-available' && targetVersion) this.setState({ ...this.state, targetVersion })
   }

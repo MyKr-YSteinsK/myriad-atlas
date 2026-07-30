@@ -52,7 +52,7 @@ describe('PWA shell', () => {
     expect(worker).toContain('precacheAndRoute((self as unknown as ServiceWorkerRuntime).__WB_MANIFEST)')
     expect(worker).toContain('cleanupOutdatedCaches()')
     expect(worker).toContain("createHandlerBoundToURL('index.html')")
-    expect(worker).toContain('isSkipWaitingMessage(event.data)')
+    expect(worker).toContain('registerServiceWorkerLifecycle(serviceWorker')
     expect(worker).not.toContain('clientsClaim')
   })
 })

@@ -1,4 +1,4 @@
-import { ACTIVE_POINTER_URL, CONTENT_META_CACHE, canonicalContentPath, hasNetworkBypass, isActiveContentPointer, type ActiveContentPointer } from './cache-protocol'
+import { ACTIVE_POINTER_URL, CONTENT_META_CACHE, canonicalContentPath, hasNetworkBypass, normalizeActiveContentPointer, type ActiveContentPointer } from './cache-protocol'
 
 interface WorkerCacheStorage {
   keys(): Promise<string[]>
@@ -45,8 +45,9 @@ export class VersionedContentHandler {
       const response = await (await this.cacheStorage.open(CONTENT_META_CACHE)).match(ACTIVE_POINTER_URL)
       if (!response) return this.pointerState = { kind: 'none' }
       const value: unknown = await response.json()
-      if (!isActiveContentPointer(value) || !(await this.cacheStorage.keys()).includes(value.cache_name)) return this.pointerState = { kind: 'invalid' }
-      return this.pointerState = { kind: 'active', pointer: value }
+      const pointer = normalizeActiveContentPointer(value)
+      if (!pointer || !(await this.cacheStorage.keys()).includes(pointer.cache_name)) return this.pointerState = { kind: 'invalid' }
+      return this.pointerState = { kind: 'active', pointer }
     } catch {
       return this.pointerState = { kind: 'none' }
     }

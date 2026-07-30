@@ -37,6 +37,7 @@ export class ContentActivationManager {
     if (job.status !== 'ready-to-activate') throw new Error('候选内容尚未完成校验。')
     const previous = await readActivePointer(this.dependencies.cacheStorage)
     const pointer: ActiveContentPointer = {
+      schema_version: 1,
       content_version: job.content_version, manifest_fingerprint: job.manifest_fingerprint,
       cache_name: job.cache_name, activated_at: new Date().toISOString(), previous_cache_name: previous?.cache_name ?? null,
     }

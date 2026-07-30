@@ -6,7 +6,7 @@ import { normalizeInterruptedOfflineJobs } from '../app/state/reader-db'
 import { reconcileActiveOfflinePointer } from './offline-pointer'
 
 export function AppUpdateProvider({ children }: PropsWithChildren) {
-  const [state, setState] = useState<AppUpdateState>({ status: 'unsupported', appVersion: APP_VERSION })
+  const [state, setState] = useState<AppUpdateState>({ status: 'unsupported', lifecycle: 'idle', appVersion: APP_VERSION })
   const [controller] = useState(() => new AppUpdateController({ onStateChange: setState }))
   useEffect(() => {
     controller.start()

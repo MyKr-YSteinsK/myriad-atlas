@@ -20,6 +20,7 @@ class MemoryCacheStorage {
 const origin = 'https://example.test'
 const fingerprint = 'a'.repeat(64)
 const pointer = {
+  schema_version: 1 as const,
   content_version: '2026.07.30-01', manifest_fingerprint: fingerprint,
   cache_name: contentCacheName('2026.07.30-01', fingerprint), activated_at: '2026-07-30T00:00:00.000Z',
 }
@@ -55,6 +56,24 @@ describe('versioned content cache protocol', () => {
     expect(await deleteCandidateCache(pointer.cache_name, [], storage)).toBe(false)
     expect(await deleteOrphanCaches([], storage)).toEqual([candidate])
     expect(await storage.keys()).toEqual(expect.arrayContaining([pointer.cache_name, 'workbox-precache-v2']))
+  })
+
+  it('normalizes v0 pointers but rejects future pointer schemas in both window and worker reads', async () => {
+    const storage = new MemoryCacheStorage()
+    await storage.open(pointer.cache_name)
+    const legacyPointer = { ...pointer }
+    delete (legacyPointer as { schema_version?: number }).schema_version
+    await (await storage.open(CONTENT_META_CACHE)).put(ACTIVE_POINTER_URL, new Response(JSON.stringify(legacyPointer)))
+    await expect(readActivePointer(storage)).resolves.toEqual(pointer)
+
+    const handler = new VersionedContentHandler(origin, storage, vi.fn(async () => new Response('network')))
+    await (await storage.open(pointer.cache_name)).put('/myriad-atlas/_generated/catalog.json', new Response('active'))
+    await expect((await handler.handle(new Request(`${origin}/myriad-atlas/_generated/catalog.json`))).text()).resolves.toBe('active')
+
+    await (await storage.open(CONTENT_META_CACHE)).put(ACTIVE_POINTER_URL, new Response(JSON.stringify({ ...pointer, schema_version: 2 })))
+    handler.resetPointer()
+    expect((await handler.handle(new Request(`${origin}/myriad-atlas/_generated/catalog.json`))).status).toBe(503)
+    await expect(readActivePointer(storage)).resolves.toBeUndefined()
   })
 
   it('uses network only without a pointer, otherwise serves exactly the active cache', async () => {

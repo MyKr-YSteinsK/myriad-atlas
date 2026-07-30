@@ -1,4 +1,4 @@
-import { ACTIVE_POINTER_URL, CONTENT_CACHE_PREFIX, CONTENT_META_CACHE, isActiveContentPointer, type ActiveContentPointer } from './cache-protocol'
+import { ACTIVE_POINTER_URL, CONTENT_CACHE_PREFIX, CONTENT_META_CACHE, isActiveContentPointer, normalizeActiveContentPointer, type ActiveContentPointer } from './cache-protocol'
 
 export type ContentCacheStorage = Pick<CacheStorage, 'keys' | 'open' | 'delete'>
 
@@ -13,7 +13,7 @@ export async function readActivePointer(cacheStorage: ContentCacheStorage | unde
     const response = await (await cacheStorage.open(CONTENT_META_CACHE)).match(ACTIVE_POINTER_URL)
     if (!response) return undefined
     const value: unknown = await response.json()
-    return isActiveContentPointer(value) ? value : undefined
+    return normalizeActiveContentPointer(value)
   } catch {
     return undefined
   }
@@ -21,7 +21,7 @@ export async function readActivePointer(cacheStorage: ContentCacheStorage | unde
 
 export async function writeActivePointer(pointer: ActiveContentPointer, cacheStorage: ContentCacheStorage | undefined = typeof caches === 'undefined' ? undefined : caches): Promise<void> {
   const storage = cacheStorageOrThrow(cacheStorage)
-  if (!isActiveContentPointer(pointer)) throw new Error('Invalid active content pointer.')
+  if (pointer.schema_version !== 1 || !isActiveContentPointer(pointer)) throw new Error('Invalid active content pointer.')
   if (!(await storage.keys()).includes(pointer.cache_name)) throw new Error('Active content cache does not exist.')
   await (await storage.open(CONTENT_META_CACHE)).put(ACTIVE_POINTER_URL, new Response(JSON.stringify(pointer), {
     headers: { 'Content-Type': 'application/json' },

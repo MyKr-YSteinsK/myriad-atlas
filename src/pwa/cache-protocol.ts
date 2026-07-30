@@ -3,6 +3,7 @@ export const CONTENT_CACHE_PREFIX = 'myriad-atlas-content-v1-'
 export const CONTENT_META_CACHE = 'myriad-atlas-content-meta-v1'
 export const ACTIVE_POINTER_URL = `${PROJECT_BASE_PATH}__offline/active.json`
 export const NETWORK_BYPASS_PARAMETER = '__myriad_network'
+export const ACTIVE_CONTENT_POINTER_SCHEMA_VERSION = 1
 
 export interface ContentManifestFile {
   path: string
@@ -12,6 +13,7 @@ export interface ContentManifestFile {
 }
 
 export interface ActiveContentPointer {
+  schema_version: typeof ACTIVE_CONTENT_POINTER_SCHEMA_VERSION
   content_version: string
   manifest_fingerprint: string
   cache_name: string
@@ -48,15 +50,36 @@ export function isContentCacheName(value: unknown): value is string {
   return typeof value === 'string' && new RegExp(`^${CONTENT_CACHE_PREFIX}[A-Za-z0-9._-]+-[a-f0-9]{64}(?:-candidate-[A-Za-z0-9._-]+)?$`).test(value)
 }
 
+/**
+ * Reads both the original unversioned pointer and the current v1 form. Cache
+ * Storage is authoritative, so legacy pointers are normalized before use.
+ */
+export function normalizeActiveContentPointer(value: unknown): ActiveContentPointer | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  if (!('content_version' in value) || typeof value.content_version !== 'string' || !safeSegment(value.content_version)) return undefined
+  if (!('manifest_fingerprint' in value) || typeof value.manifest_fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(value.manifest_fingerprint)) return undefined
+  if (!('cache_name' in value) || typeof value.cache_name !== 'string' || !isContentCacheName(value.cache_name)) return undefined
+  if (value.cache_name !== contentCacheName(value.content_version, value.manifest_fingerprint)
+    && !value.cache_name.startsWith(`${contentCacheName(value.content_version, value.manifest_fingerprint)}-candidate-`)) return undefined
+  if (!('activated_at' in value) || typeof value.activated_at !== 'string' || Number.isNaN(Date.parse(value.activated_at))) return undefined
+  const previousCacheName = 'previous_cache_name' in value ? value.previous_cache_name : undefined
+  if (previousCacheName !== undefined && previousCacheName !== null
+    && (typeof previousCacheName !== 'string' || !isContentCacheName(previousCacheName))) return undefined
+
+  const schemaVersion = 'schema_version' in value ? value.schema_version : undefined
+  if (schemaVersion !== undefined && schemaVersion !== ACTIVE_CONTENT_POINTER_SCHEMA_VERSION) return undefined
+  return {
+    schema_version: ACTIVE_CONTENT_POINTER_SCHEMA_VERSION,
+    content_version: value.content_version,
+    manifest_fingerprint: value.manifest_fingerprint,
+    cache_name: value.cache_name,
+    activated_at: value.activated_at,
+    previous_cache_name: previousCacheName,
+  }
+}
+
 export function isActiveContentPointer(value: unknown): value is ActiveContentPointer {
-  return typeof value === 'object' && value !== null
-    && 'content_version' in value && typeof value.content_version === 'string' && safeSegment(value.content_version)
-    && 'manifest_fingerprint' in value && typeof value.manifest_fingerprint === 'string' && /^[a-f0-9]{64}$/.test(value.manifest_fingerprint)
-    && 'cache_name' in value && typeof value.cache_name === 'string' && isContentCacheName(value.cache_name)
-    && (value.cache_name === contentCacheName(value.content_version, value.manifest_fingerprint)
-      || value.cache_name.startsWith(`${contentCacheName(value.content_version, value.manifest_fingerprint)}-candidate-`))
-    && 'activated_at' in value && typeof value.activated_at === 'string' && !Number.isNaN(Date.parse(value.activated_at))
-    && (!('previous_cache_name' in value) || value.previous_cache_name === null || typeof value.previous_cache_name === 'string' && isContentCacheName(value.previous_cache_name))
+  return normalizeActiveContentPointer(value) !== undefined
 }
 
 export function canonicalContentPath(input: string | URL, expectedOrigin?: string): string | undefined {

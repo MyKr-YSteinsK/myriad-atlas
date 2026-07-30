@@ -1,5 +1,5 @@
 import { basePath } from '../../lib/base-path'
-import { ACTIVE_POINTER_URL, CONTENT_META_CACHE, isActiveContentPointer, type ActiveContentPointer } from '../cache-protocol'
+import { ACTIVE_POINTER_URL, CONTENT_META_CACHE, normalizeActiveContentPointer, type ActiveContentPointer } from '../cache-protocol'
 import { type ContentCacheStorage } from '../content-cache'
 import { isDownloadManifest, sha256, type DownloadManifest } from '../download/content-download'
 
@@ -28,9 +28,10 @@ export async function verifyActiveContent(
   if (!cacheStorage) return { status: 'pointer-invalid', message: 'Cache Storage is unavailable.' }
   const pointerResponse = await (await cacheStorage.open(CONTENT_META_CACHE)).match(ACTIVE_POINTER_URL)
   if (!pointerResponse) return { status: 'pointer-invalid', message: 'No active content pointer exists.' }
-  let pointer: unknown
-  try { pointer = await pointerResponse.json() } catch { return { status: 'pointer-invalid', message: 'The active content pointer is malformed.' } }
-  if (!isActiveContentPointer(pointer) || !(await cacheStorage.keys()).includes(pointer.cache_name)) {
+  let rawPointer: unknown
+  try { rawPointer = await pointerResponse.json() } catch { return { status: 'pointer-invalid', message: 'The active content pointer is malformed.' } }
+  const pointer = normalizeActiveContentPointer(rawPointer)
+  if (!pointer || !(await cacheStorage.keys()).includes(pointer.cache_name)) {
     return { status: 'pointer-invalid', message: 'The active content pointer does not identify an existing content cache.' }
   }
   if (expectedContentVersion && pointer.content_version !== expectedContentVersion) {
