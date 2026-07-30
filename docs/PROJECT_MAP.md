@@ -3,10 +3,11 @@
 ## 应用
 
 - `src/main.tsx`：React 启动入口；`src/app/router.tsx`：HashRouter。
-- `src/app/App.tsx` 与 `src/app/pages/`：空库、节点加载、错误边界和路由页面。
-- `src/lib/base-path.ts`：项目子路径与 Hash URL 的唯一解析入口；`src/lib/content-client.ts`：运行时 catalog 与节点 JSON 客户端。
+- `src/app/App.tsx`、`layout/` 与 `pages/`：五项导航、首页、路线、知识库、搜索、漫游、“我的”和节点路由。
+- `src/lib/base-path.ts`：项目子路径与 Hash URL 的唯一解析入口；`src/lib/content-client.ts` / `search-repository.ts`：ContentRepository 与 Pagefind SearchRepository。
 - `src/app/reader/`：沉浸阅读器、设置面板及仅开发环境的长文样本；`src/app/state/reader-db.ts`：保留 v1 迁移链的 Dexie v2 数据库与表定义。
 - `src/app/state/local-state.ts`：节点状态、路线位置、问题草稿、待删除和意见的唯一写入服务与同标签页 revision 订阅。
+- `src/app/data/route-progress.ts`：路线进度与继续算法；`question-chains.ts`：QA ID、线性问题链、绑定和生成请求；`roaming.ts`：漫游池与安全随机。
 - `src/app/styles/global.css`：主题 token、safe area、减少动态效果与阅读排版。
 
 ## 内容源与契约
@@ -32,9 +33,10 @@
 
 - `npm run content:validate`：只读验证源内容。
 - `npm run content:build`：生成运行时内容产物；`npm run content:map` / `content:map:check`：更新或检查知识地图。
+- `npm run content:fixture` / `npm run dev:fixture`：从隔离 fixture 构建非空开发数据；正常 build 会恢复真实空库。
 - `npm run lint`、`npm run typecheck`、`npm run test -- --run`、`npm run build`、`npm run verify`：质量与生产构建入口。
 - `.github/workflows/pages.yml`：在 `main` 验证并将 `dist/` 部署至 GitHub Pages。
 
 ## 后续预留
 
-完整 PWA/Workbox、搜索 UI、路线 UI 与进度、完整本地状态交互及批次导入尚未实现。
+完整 PWA/Workbox、备份恢复、更新管理与 ZIP 批次导入尚未实现。

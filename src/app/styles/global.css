@@ -39,7 +39,7 @@
 
 * { box-sizing: border-box; }
 html, body, #root { min-height: 100%; margin: 0; }
-body { min-width: 320px; }
+body { min-width: 0; }
 button, input, select { font: inherit; }
 :focus-visible { outline: 3px solid var(--color-accent); outline-offset: 3px; }
 .skip-link { background: var(--color-surface); color: var(--color-text); left: 1rem; padding: .75rem; position: fixed; top: -5rem; z-index: 20; }
@@ -97,6 +97,9 @@ button, input, select { font: inherit; }
 .questions-page > ol, .question-timeline { list-style: none; margin: 2rem 0; padding: 0; }.questions-page > ol > li { border-top: 1px solid var(--color-line); padding: 1rem 0; }.questions-page h2 a, .question-detail a { color: var(--color-text); }
 .question-timeline { border-left: 1px solid var(--color-line); margin-left: .5rem; }.question-timeline li { padding: 0 0 2rem 1.5rem; position: relative; }.question-timeline li::before { background: var(--color-canvas); border: 2px solid var(--color-accent); border-radius: 50%; content: ""; height: .7rem; left: -.45rem; position: absolute; top: .2rem; width: .7rem; }
 .copy-request button, .question-detail > button { background: transparent; border: 1px solid var(--color-line); color: var(--color-text); min-height: 44px; padding: .5rem .75rem; }.copy-request label { display: grid; gap: .4rem; margin-top: .5rem; }.copy-request textarea { min-height: 12rem; width: 100%; }
+.me-page > ol, .me-state-list { list-style: none; margin: 2rem 0; padding: 0; }.me-page > ol li { border-top: 1px solid var(--color-line); }.me-page > ol a { align-items: center; color: var(--color-text); display: flex; justify-content: space-between; min-height: 54px; text-decoration: none; }.me-page > ol span { color: var(--color-muted); font-variant-numeric: tabular-nums; }.me-page > section { border-top: 1px solid var(--color-line); padding-top: 1rem; }.me-page button, .me-state-list button, .opinions-page button { background: transparent; border: 1px solid var(--color-line); color: var(--color-text); min-height: 44px; padding: .5rem .75rem; }
+.future-note { color: var(--color-muted); font-size: .85rem; margin-top: 3rem; }.me-state-list li { border-top: 1px solid var(--color-line); padding: 1rem 0; }.me-state-list h2 { font-size: 1.25rem; }.me-state-list h2 a { color: var(--color-text); }.me-state-list textarea { display: block; min-height: 5rem; width: 100%; }
+.opinion-editor { display: grid; gap: 1rem; margin: 2rem 0; }.opinion-editor label { display: grid; gap: .4rem; }.opinion-editor select, .opinion-editor textarea, .opinions-page > textarea { background: var(--color-surface); border: 1px solid var(--color-line); color: var(--color-text); min-height: 44px; padding: .5rem; width: 100%; }.opinion-editor textarea, .opinions-page > textarea { min-height: 8rem; }
 @keyframes atlas-enter { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: translateX(0); } }
 
 .app-shell {

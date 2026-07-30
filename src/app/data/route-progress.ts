@@ -9,6 +9,13 @@ export interface RouteTarget {
   moduleName: string
 }
 
+export function resolveRecentRoute(
+  recentRouteState: { routeId: string; route?: RuntimeRoute } | undefined,
+  routeId: string | undefined,
+): RuntimeRoute | undefined {
+  return recentRouteState && recentRouteState.routeId === routeId ? recentRouteState.route : undefined
+}
+
 export function routeTargets(route: RuntimeRoute): RouteTarget[] {
   return route.stages.flatMap((stage) => stage.modules.flatMap((module) => module.units
     .filter((unit) => unit.role === 'core' || unit.role === 'anchor')

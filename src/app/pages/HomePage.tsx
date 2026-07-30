@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { RuntimeRoute } from '../../content/types'
 import { useAppData } from '../data/app-data-context'
-import { continueRoute, routeProgress } from '../data/route-progress'
+import { continueRoute, resolveRecentRoute, routeProgress } from '../data/route-progress'
 import { useLocalStateSnapshot } from '../state/use-local-state'
 
 export function HomePage() {
@@ -25,7 +25,7 @@ export function HomePage() {
   if (state.status === 'loading') return <section className="atlas-page"><h1 tabIndex={-1}>万象回廊 · MyKr</h1><p role="status">正在加载知识航图……</p></section>
   if (state.status === 'error') return <section className="atlas-page"><h1 tabIndex={-1}>万象回廊 · MyKr</h1><p role="alert">{state.error.message}</p></section>
   const { catalog, taxonomy, routes, contentVersion } = state.data
-  const recentRoute = recentRouteState?.routeId === latestPosition?.route_id ? recentRouteState.route : undefined
+  const recentRoute = resolveRecentRoute(recentRouteState, latestPosition?.route_id)
   const knownIds = new Set(catalog.nodes.map((node) => node.id))
   const states = local.nodeStates.filter((entry) => knownIds.has(entry.node_id))
   const completed = new Set(states.filter((entry) => entry.completed).map((entry) => entry.node_id))

@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import { App } from '../../src/app/App'
 import { parseNodeContext } from '../../src/app/data/node-context'
+import { resolveRecentRoute } from '../../src/app/data/route-progress'
 import type { RuntimeCatalog, RuntimeRoutesIndex, RuntimeTaxonomy } from '../../src/content/types'
 
 const data = {
@@ -27,6 +28,9 @@ describe('application routes and node context', () => {
   it('registers the planned route list', () => {
     render(<MemoryRouter initialEntries={['/me/pending-removals']}><App /></MemoryRouter>)
     expect(screen.getByRole('heading', { name: '待删除' })).toBeInTheDocument()
+  })
+  it('keeps an empty recent-route state on the home page safe', () => {
+    expect(resolveRecentRoute(undefined, undefined)).toBeUndefined()
   })
   it('accepts only validated route and course context without return URLs', () => {
     expect(parseNodeContext(new URLSearchParams('source=course&domain=domain&course=course'), data)).toEqual({

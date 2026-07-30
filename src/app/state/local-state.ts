@@ -41,6 +41,7 @@ export const localState = {
   listQuestionDrafts: (): Promise<QuestionDraft[]> => readerDb.questionDrafts.toArray(),
   listPendingRemovals: (): Promise<PendingRemoval[]> => readerDb.pendingRemovals.toArray(),
   listOpinions: (): Promise<Opinion[]> => readerDb.opinions.toArray(),
+  deleteNodeState: async (nodeId: string): Promise<void> => { await readerDb.nodeStates.delete(nodeId); changed() },
   toggleCompleted: (nodeId: string): Promise<NodeState> => updateNode(nodeId, (value, timestamp) => {
     value.completed = !value.completed
     value.completed_at = value.completed ? timestamp : null

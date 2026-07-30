@@ -12,6 +12,9 @@
 - 永久节点 ID、taxonomy ID、route ID、route code 及特殊课程四位序号不得修改、复用或重新分配。
 - 不得自行新建领域、课程或正式知识节点；Schema 变更必须是明确的产品决策。
 - 内容契约、解析、引用、迁移、状态、生产构建与关键流程优先于非关键 UI 测试。
+- `completed` 与 `unknown` 可以并存；路线进度只计算 `core` 与 `anchor`，不计算 `optional`。
+- `uninterested` 只作为本地待删除语义；QA chain 必须线性，预留 ID 删除或隐藏后也不得复用。
+- `tests/fixtures/` 不得进入正式内容、知识地图或生产构建；Dexie 升级必须保留旧版本声明并通过事务迁移，禁止清库重建。
 
 ## 实施与 Git
 

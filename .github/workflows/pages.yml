@@ -26,14 +26,24 @@ jobs:
       - run: npm ci
       - run: npm run verify
       - run: npm run content:map:check
+      - name: Verify fixture and production isolation
+        run: |
+          npm run content:fixture
+          npm run test -- --run tests/content/search.test.ts
+          npm run build
       - name: Check deployment artifact boundary
         run: |
           test -f dist/_generated/catalog.json
+          test -f dist/_generated/taxonomy.json
+          test -f dist/_generated/routes.json
+          test -f dist/_generated/qa-index.json
+          test -f dist/_generated/content-manifest.json
+          test -f dist/_generated/search-status.json
           if find dist -type f \( -name '*.md' -o -path '*/tests/*' -o -path '*/schemas/*' \) | grep -q .; then
             echo 'Source content or test files leaked into dist.'
             exit 1
           fi
-          if rg -l 'READER_PREVIEW_ONLY|Plan-01' dist; then
+          if rg -l 'APP_FIXTURE_ONLY|READER_PREVIEW_ONLY|Plan-[0-9]+' dist; then
             echo 'Development-only content leaked into dist.'
             exit 1
           fi
