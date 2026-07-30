@@ -17,6 +17,6 @@ describe('application shell', () => {
       '首页', '路线', '知识库', '随机漫游', '我的',
     ])
     expect(screen.getByRole('link', { name: '首页' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('link', { name: '打开全文搜索' })).toHaveAttribute('href', '#/search')
+    expect(screen.getByRole('link', { name: '打开全文搜索' })).toHaveAttribute('href', '#/search?focus=1')
   })
 })

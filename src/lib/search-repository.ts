@@ -2,6 +2,7 @@ import type { SearchStatus } from '../content/types'
 import { basePath, PROJECT_BASE_PATH } from './base-path'
 import { ContentClientError } from './errors'
 import type { ContentRepository } from './content-client'
+import { contentRepository } from './content-client'
 
 export interface SearchResult {
   url: string
@@ -77,3 +78,5 @@ function isStringRecord(value: unknown): value is Record<string, string> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
     && Object.values(value as Record<string, unknown>).every((entry) => typeof entry === 'string')
 }
+
+export const searchRepository = new SearchRepository(contentRepository)

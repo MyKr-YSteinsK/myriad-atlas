@@ -4,6 +4,7 @@ import { HomePage } from './pages/HomePage'
 import { MePage, RoamingPage } from './pages/MainPages'
 import { CoursePage, DomainPage, LibraryPage } from './pages/LibraryPages'
 import { RouteDetailPage, RoutesPage } from './pages/RoutePages'
+import { SearchPage } from './pages/SearchPage'
 import { NodePage } from './pages/NodePage'
 import { AppLayout } from './layout/AppLayout'
 
@@ -38,7 +39,7 @@ export function App() {
       <Route path="/library" element={<LibraryPage />} />
       <Route path="/library/:domainId" element={<DomainPage />} />
       <Route path="/library/:domainId/:courseId" element={<CoursePage />} />
-      <Route path="/search" element={<PlaceholderPage title={titles.search} />} />
+      <Route path="/search" element={<SearchPage />} />
       <Route path="/roaming" element={<RoamingPage />} />
       <Route path="/me" element={<MePage />} />
       <Route path="/me/completed" element={<PlaceholderPage title={titles.completed} />} />

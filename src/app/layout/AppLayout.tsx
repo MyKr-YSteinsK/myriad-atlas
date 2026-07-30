@@ -22,7 +22,7 @@ export function AppLayout() {
     <a className="skip-link" href="#main-content">跳到主要内容</a>
     <header className="atlas-topbar">
       <p>万象回廊 · MyKr</p>
-      <Link className="atlas-search-link" to="/search" aria-label="打开全文搜索">
+      <Link className="atlas-search-link" to="/search?focus=1" aria-label="打开全文搜索">
         <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" /><path d="m15.5 15.5 5 5" stroke="currentColor" /></svg>
         <span>搜索</span>
       </Link>
