@@ -39,6 +39,15 @@ jobs:
           test -f dist/_generated/qa-index.json
           test -f dist/_generated/content-manifest.json
           test -f dist/_generated/search-status.json
+          test -f dist/manifest.webmanifest
+          test -f dist/sw.js
+          test -f dist/icons/icon-192.png
+          test -f dist/icons/icon-512.png
+          test -f dist/icons/apple-touch-icon-180.png
+          if rg -F 'self.__WB_MANIFEST' dist/sw.js; then
+            echo 'Service Worker precache manifest was not injected.'
+            exit 1
+          fi
           if find dist -type f \( -name '*.md' -o -path '*/tests/*' -o -path '*/schemas/*' \) | grep -q .; then
             echo 'Source content or test files leaked into dist.'
             exit 1

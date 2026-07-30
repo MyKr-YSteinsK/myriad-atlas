@@ -1,0 +1,25 @@
+{
+  "name": "万象回廊 · MyKr",
+  "short_name": "万象回廊",
+  "id": "/myriad-atlas/",
+  "start_url": "/myriad-atlas/#/",
+  "scope": "/myriad-atlas/",
+  "display": "standalone",
+  "background_color": "#f7f6f2",
+  "theme_color": "#25443b",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/myriad-atlas/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/myriad-atlas/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
