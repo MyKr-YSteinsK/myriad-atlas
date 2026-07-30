@@ -50,6 +50,7 @@ export function MePage() {
     ['/me/opinions', '意见', local.opinions.length],
   ] as const
   return <section className="atlas-page me-page"><p className="atlas-coordinate">LOCAL / ME</p><h1 tabIndex={-1}>我的</h1><ol>{entries.map(([to, label, count]) => <li key={to}><Link to={to}>{label}<span>{count}</span></Link></li>)}</ol>
+    <section className="me-management"><h2>离线与数据</h2><ol><li><Link to="/me/offline">离线与更新</Link></li><li><Link to="/me/versions">版本日志</Link></li><li><Link to="/me/backups">备份与恢复</Link></li><li><Link to="/me/storage">存储与修复</Link></li></ol></section>
     <section><h2>阅读设置</h2><p>{preferences.font === 'serif' ? '衬线' : '系统字体'} · {preferences.theme} · {preferences.fontSize}px</p>{storageWarning && <p role="status">阅读设置暂未写入本地。</p>}<button ref={settingsButton} type="button" onClick={() => setSettingsOpen(true)}>调整阅读设置</button></section>
     <section className="app-management"><h2>应用与安装</h2><p>当前应用版本：{APP_VERSION}</p>
       {appUpdate.state.status === 'offline-ready' && <p role="status">应用离线外壳已准备好。</p>}
@@ -58,7 +59,6 @@ export function MePage() {
       <InstallGuidance />
     </section>
     {(appData.state.status === 'ready' || appData.state.status === 'empty') && <section className="app-changelog"><h2>应用更新说明</h2><ol>{appData.state.data.appChangelog.entries.map((entry) => <li key={`${entry.version}-${entry.date}`}><strong>{entry.version}</strong><span>{entry.date}</span><p>{entry.summary}</p></li>)}</ol></section>}
-    <p className="future-note">完整离线、备份恢复与更新管理将在后续阶段提供。</p>
     <ReaderSettings open={settingsOpen} preferences={preferences} onChange={update} onReset={reset} onClose={() => setSettingsOpen(false)} triggerRef={settingsButton} />
   </section>
 }

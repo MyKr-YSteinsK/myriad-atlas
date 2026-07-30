@@ -10,6 +10,7 @@ import { QuestionDetailPage, QuestionsPage } from './pages/QuestionPages'
 import { NodePage } from './pages/NodePage'
 import { AppLayout } from './layout/AppLayout'
 import { AppUpdateNotice } from '../pwa/AppUpdateNotice'
+import { BackupPlaceholderPage, OfflinePage, StoragePage, VersionsPage } from './pages/OfflinePages'
 
 const DevReaderPreview = import.meta.env.DEV ? lazy(() => import('./reader/dev/ReaderPreviewPage')) : undefined
 function NotFoundPage() {
@@ -35,6 +36,10 @@ export function App() {
       <Route path="/me/questions/:chainId" element={<QuestionDetailPage />} />
       <Route path="/me/pending-removals" element={<PendingRemovalsPage />} />
       <Route path="/me/opinions" element={<OpinionsPage />} />
+      <Route path="/me/offline" element={<OfflinePage />} />
+      <Route path="/me/versions" element={<VersionsPage />} />
+      <Route path="/me/storage" element={<StoragePage />} />
+      <Route path="/me/backups" element={<BackupPlaceholderPage />} />
       <Route path="*" element={<NotFoundPage />} />
     </Route>
     <Route path="/node/:nodeId" element={<NodePage />} />

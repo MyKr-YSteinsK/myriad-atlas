@@ -76,9 +76,9 @@ export const localState = {
     await readerDb.appMeta.put({ key, value, updated_at: now() })
     changed()
   },
-  saveOfflineJob: async (job: OfflineJob): Promise<void> => { await readerDb.offlineJobs.put(job) },
-  saveOfflineFile: async (file: OfflineFile): Promise<void> => { await readerDb.offlineFiles.put(file) },
-  saveOfflineFiles: async (files: OfflineFile[]): Promise<void> => { await readerDb.offlineFiles.bulkPut(files) },
+  saveOfflineJob: async (job: OfflineJob): Promise<void> => { await readerDb.offlineJobs.put(job); changed() },
+  saveOfflineFile: async (file: OfflineFile): Promise<void> => { await readerDb.offlineFiles.put(file); changed() },
+  saveOfflineFiles: async (files: OfflineFile[]): Promise<void> => { await readerDb.offlineFiles.bulkPut(files); changed() },
   deleteNodeState: async (nodeId: string): Promise<void> => {
     await mutatePersonalState([readerDb.nodeStates], () => readerDb.nodeStates.delete(nodeId))
   },

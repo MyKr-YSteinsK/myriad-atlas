@@ -13,7 +13,7 @@ export function AppDataProvider({
   const stableState = useRef<Extract<AppDataState, { data: unknown }> | undefined>(undefined)
   const loadSequence = useRef(0)
   const activeController = useRef<AbortController | undefined>(undefined)
-  const load = useCallback(async (refreshing: boolean): Promise<void> => {
+  const load = useCallback(async (refreshing: boolean): Promise<boolean> => {
     const sequence = ++loadSequence.current
     activeController.current?.abort()
     const previous = stableState.current
@@ -25,17 +25,19 @@ export function AppDataProvider({
       const { catalog, taxonomy, routes, qaIndex, manifest, appChangelog, knowledgeChangelog } = refreshing
         ? await repository.reload(controller.signal)
         : await loadAppData(repository, controller.signal)
-      if (sequence !== loadSequence.current) return
+      if (sequence !== loadSequence.current) return false
       const data = { catalog, taxonomy, routes, qaIndex, manifest, appChangelog, knowledgeChangelog, contentVersion: catalog.content_version }
       const next = { status: catalog.nodes.length === 0 ? 'empty' as const : 'ready' as const, data }
       stableState.current = next
       setState(next)
       void reconcileQuestionChains(qaIndex)
+      return true
     } catch (reason: unknown) {
-      if (sequence !== loadSequence.current || reason instanceof DOMException && reason.name === 'AbortError') return
+      if (sequence !== loadSequence.current || reason instanceof DOMException && reason.name === 'AbortError') return false
       const error = reason instanceof ContentClientError ? reason : new ContentClientError('application', '应用数据无法加载。')
       if (previous) setState({ ...previous, refreshing: false, refreshError: error })
       else setState({ status: 'error', error })
+      return false
     }
   }, [repository])
   useEffect(() => {

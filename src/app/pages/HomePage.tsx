@@ -4,6 +4,7 @@ import type { RuntimeRoute } from '../../content/types'
 import { useAppData } from '../data/app-data-context'
 import { continueRoute, resolveRecentRoute, routeProgress } from '../data/route-progress'
 import { useLocalStateSnapshot } from '../state/use-local-state'
+import { OfflineHomeHint } from './OfflinePages'
 
 export function HomePage() {
   const { state, repository } = useAppData()
@@ -44,6 +45,7 @@ export function HomePage() {
   return <section className="atlas-page home-page"><p className="atlas-coordinate">ORIGIN / {contentVersion}</p>
     <header className="site-header"><p className="site-kicker">Myriad Atlas · MyKr</p><h1 tabIndex={-1}>万象回廊 · MyKr</h1></header>
     {local.unavailable && <p className="local-state-warning" role="status">本地状态暂不可用；知识浏览仍可继续。</p>}
+    <OfflineHomeHint />
     {state.status === 'empty' && <div className="atlas-empty"><span aria-hidden="true">00</span><p>内容库尚未导入。</p></div>}
     {readingRecord && latestReading?.reading_progress && <section className="home-primary"><p className="section-index">01 / 继续阅读</p><h2>{readingRecord.title}</h2><p>{readingRecord.course_name} · {Math.round(latestReading.reading_progress.ratio * 100)}%</p><Link to={`/node/${readingRecord.id}?source=home`}>继续阅读</Link></section>}
     {recentRoute && progress && <section className="home-route"><p className="section-index">02 / 继续路线</p><h2>{recentRoute.name}</h2><p>{progress.completed} / {progress.total} 个主线与综合任务已完成</p>{routeTarget
