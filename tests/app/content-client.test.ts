@@ -62,6 +62,13 @@ describe('runtime content repositories', () => {
     await expect(new ContentRepository(vi.fn()).loadRoute('../secret')).rejects.toMatchObject({ kind: 'missing' })
   })
 
+  it('reports active offline cache damage without falling back to a mixed network version', async () => {
+    const offline = new ContentRepository(vi.fn().mockResolvedValue(new Response('missing active file', { status: 503, headers: { 'X-Myriad-Offline': 'active-cache-miss' } })))
+    await expect(offline.loadCatalog()).rejects.toMatchObject({
+      kind: 'offline', message: '离线内容已损坏，请检查完整性或重新下载。',
+    } satisfies Partial<ContentClientError>)
+  })
+
   it('passes AbortSignal to fetch', async () => {
     const fetcher = vi.fn().mockResolvedValue(json(emptyCatalog))
     const signal = new AbortController().signal

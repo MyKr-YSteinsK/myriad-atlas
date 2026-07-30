@@ -2,15 +2,20 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { readerDb } from '../../src/app/state/reader-db'
 import { localState } from '../../src/app/state/local-state'
 import { reconcileActiveOfflinePointer, writeActiveOfflinePointer, type ActiveOfflinePointer } from '../../src/pwa/offline-pointer'
+import { contentCacheName } from '../../src/pwa/cache-protocol'
 
 class MemoryCacheStorage {
-  private readonly entries = new Map<string, Response>()
-  async open(): Promise<Cache> {
+  private readonly caches = new Map<string, Map<string, Response>>()
+  async open(name: string): Promise<Cache> {
+    const entries = this.caches.get(name) ?? new Map<string, Response>()
+    this.caches.set(name, entries)
     return {
-      match: async (request) => this.entries.get(String(request))?.clone(),
-      put: async (request, response) => { this.entries.set(String(request), response.clone()) },
+      match: async (request) => entries.get(String(request))?.clone(),
+      put: async (request, response) => { entries.set(String(request), response.clone()) },
     } as Cache
   }
+  async keys(): Promise<string[]> { return [...this.caches.keys()] }
+  async delete(name: string): Promise<boolean> { return this.caches.delete(name) }
 }
 
 describe('offline active pointer', () => {
@@ -21,7 +26,8 @@ describe('offline active pointer', () => {
 
   it('uses Cache Storage as the source of truth when the Dexie mirror conflicts', async () => {
     const storage = new MemoryCacheStorage()
-    const pointer: ActiveOfflinePointer = { content_version: '2026.07.30-01', manifest_fingerprint: 'a'.repeat(64), cache_name: 'myriad-content-a', activated_at: '2026-07-30T00:00:00.000Z' }
+    const pointer: ActiveOfflinePointer = { content_version: '2026.07.30-01', manifest_fingerprint: 'a'.repeat(64), cache_name: contentCacheName('2026.07.30-01', 'a'.repeat(64)), activated_at: '2026-07-30T00:00:00.000Z' }
+    await storage.open(pointer.cache_name)
     await writeActiveOfflinePointer(pointer, storage)
     await localState.mirrorAppMeta('offline.active', { ...pointer, manifest_fingerprint: 'b'.repeat(64), cache_name: 'myriad-content-b' })
 

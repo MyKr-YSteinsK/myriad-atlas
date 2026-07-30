@@ -58,6 +58,11 @@ export class ContentRepository {
       if (error instanceof DOMException && error.name === 'AbortError') throw error
       throw new ContentClientError('network', '无法连接内容文件，请检查网络或稍后重试。')
     }
+    const offlineDiagnostic = response.headers.get('X-Myriad-Offline')
+    if (offlineDiagnostic) {
+      const damaged = offlineDiagnostic === 'active-cache-miss' || offlineDiagnostic === 'invalid-active-pointer'
+      throw new ContentClientError('offline', damaged ? '离线内容已损坏，请检查完整性或重新下载。' : '离线内容当前不可用。')
+    }
     if (response.status === 404) throw new ContentClientError('missing', '构建内容文件不存在。请重新执行内容构建。')
     if (!response.ok) throw new ContentClientError('network', `内容请求失败（HTTP ${response.status}）。`)
     try {

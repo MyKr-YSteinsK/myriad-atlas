@@ -1,4 +1,6 @@
-export const PROJECT_BASE_PATH = '/myriad-atlas/'
+import { PROJECT_BASE_PATH as protocolBasePath } from '../pwa/cache-protocol'
+
+export const PROJECT_BASE_PATH = protocolBasePath
 
 export function basePath(path = ''): string {
   return `${PROJECT_BASE_PATH.replace(/\/$/, '')}/${path.replace(/^\//, '')}`
