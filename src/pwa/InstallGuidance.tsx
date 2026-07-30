@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react'
 import { isIphoneSafari, isStandalone } from './install-detection'
+import { localState } from '../app/state/local-state'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>
 }
 
-const DISMISS_KEY = 'myriad-atlas.install-guidance.dismissed'
-
 export function InstallGuidance() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent>()
-  const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISS_KEY) === 'true')
+  const [dismissed, setDismissed] = useState(false)
   const standalone = isStandalone(window.matchMedia('(display-mode: standalone)').matches, (navigator as Navigator & { standalone?: boolean }).standalone === true)
   const iphoneSafari = isIphoneSafari(navigator.userAgent)
   useEffect(() => {
@@ -20,9 +19,11 @@ export function InstallGuidance() {
     window.addEventListener('beforeinstallprompt', onBeforeInstall)
     return () => window.removeEventListener('beforeinstallprompt', onBeforeInstall)
   }, [])
+  useEffect(() => {
+    void localState.getAppMeta<boolean>('install.guidance').then((value) => setDismissed(value === true)).catch(() => undefined)
+  }, [])
   const dismiss = (): void => {
-    localStorage.setItem(DISMISS_KEY, 'true')
-    setDismissed(true)
+    void localState.saveAppPreference('install.guidance', true).then(() => setDismissed(true)).catch(() => undefined)
   }
   if (dismissed) return null
   if (standalone) return <p className="install-guidance" role="status">当前正作为主屏幕 Web App 运行；建议在此处完成下载并长期使用。</p>

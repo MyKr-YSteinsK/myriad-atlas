@@ -85,6 +85,7 @@ export async function createFollowUp(
   source: CatalogRecord,
   qaIndex: RuntimeQaIndex,
   question: string,
+  unknown?: { nodeId: string; note: string },
 ): Promise<QuestionDraft> {
   const formal = qaIndex.chains.find((entry) => entry.chain_id === chain.chain_id)
   const parent = formal?.answers.at(-1)
@@ -101,8 +102,7 @@ export async function createFollowUp(
     source_content_version: qaIndex.content_version, status: 'awaiting-import', copied_at: null,
     created_at: now, updated_at: now,
   }
-  await localState.saveQuestionDraft(draft)
-  await localState.saveQuestionChain({ ...chain, status: 'awaiting-import', updated_at: now })
+  await localState.saveFollowUp({ ...chain, status: 'awaiting-import', updated_at: now }, draft, unknown && { node_id: unknown.nodeId, note: unknown.note })
   return draft
 }
 

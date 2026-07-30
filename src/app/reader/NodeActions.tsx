@@ -51,7 +51,6 @@ export function NodeActions({ node, catalog }: { node: RuntimeNode; catalog?: Ru
     const record = appData.state.data.catalog.nodes.find((entry) => entry.id === node.id)
     if (!record) throw new Error('来源节点不在目录中')
     if (node.qa) {
-      await localState.setUnknown(node.id, note)
       const formal = appData.state.data.qaIndex.chains.find((entry) => entry.chain_id === node.qa!.chain_id)
       if (!formal) throw new Error('正式问题链索引缺失')
       let chain = local.questionChains.find((entry) => entry.chain_id === formal.chain_id)
@@ -64,7 +63,7 @@ export function NodeActions({ node, catalog }: { node: RuntimeNode; catalog?: Ru
         }
         await localState.saveQuestionChain(chain)
       }
-      await createFollowUp(chain, record, appData.state.data.qaIndex, note)
+      await createFollowUp(chain, record, appData.state.data.qaIndex, note, { nodeId: node.id, note })
       navigate(`/me/questions/${chain.chain_id}`)
     } else {
       const created = await createUnknownQuestionChain(record, appData.state.data.qaIndex, note)

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, type PropsWithChildren } from 'react'
 import { AppUpdateController, type AppUpdateState } from './app-updates'
 import { APP_VERSION } from '../lib/content-version'
 import { AppUpdateContext } from './app-update-context'
+import { normalizeInterruptedOfflineJobs } from '../app/state/reader-db'
+import { reconcileActiveOfflinePointer } from './offline-pointer'
 
 export function AppUpdateProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<AppUpdateState>({ status: 'unsupported', appVersion: APP_VERSION })
@@ -10,6 +12,10 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
     controller.start()
     return () => controller.dispose()
   }, [controller])
+  useEffect(() => {
+    void normalizeInterruptedOfflineJobs().catch(() => undefined)
+    void reconcileActiveOfflinePointer().catch(() => undefined)
+  }, [])
   const value = useMemo(() => ({
     state,
     activateUpdate: () => controller.activateUpdate(),

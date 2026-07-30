@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { localState } from '../../src/app/state/local-state'
-import { readerDb, type QuestionDraft } from '../../src/app/state/reader-db'
+import { defaultReaderPreferences, readerDb, type QuestionDraft } from '../../src/app/state/reader-db'
 
 describe('local state repository', () => {
   beforeEach(async () => {
@@ -91,5 +91,21 @@ describe('local state repository', () => {
     await readerDb.questionDrafts.delete(draft.draft_id)
     await readerDb.pendingRemovals.put({ id: `qa-chain:${chain.chain_id}`, kind: 'qa-chain', target_id: chain.chain_id, root_node_id: 'node', note: '', created_at: 'created', updated_at: 'created' })
     await expect(localState.undoHiddenQuestionChain(chain.chain_id)).rejects.toThrow(/reliable previous status/)
+  })
+
+  it('counts personal mutations once while excluding progress, routes, and offline metadata', async () => {
+    expect(await localState.getMutationCount()).toBe(0)
+    await localState.markRoamingUninterested('roaming', '不需要')
+    expect(await localState.getMutationCount()).toBe(1)
+    await localState.saveReadingProgress('roaming', 0.5, '', [])
+    await localState.saveRoutePosition({ route_id: 'route', stage_id: 'stage', module_id: 'module', node_id: 'roaming' })
+    await localState.saveOfflineJob({
+      job_id: 'job', content_version: 'v', manifest_fingerprint: 'f'.repeat(64), cache_name: 'cache', status: 'estimating',
+      bytes_total: 0, bytes_done: 0, files_total: 0, files_done: 0, current_path: null, error_code: null, error_message: null, created_at: 'now', updated_at: 'now',
+    })
+    expect(await localState.getMutationCount()).toBe(1)
+    await localState.saveReaderPreferences({ ...defaultReaderPreferences, fontSize: 20 })
+    await localState.saveAppPreference('install.guidance', true)
+    expect(await localState.getMutationCount()).toBe(3)
   })
 })

@@ -76,6 +76,38 @@ export interface Opinion {
   created_at: string
   updated_at: string
 }
+export type OfflineJobStatus = 'estimating' | 'downloading' | 'paused' | 'failed' | 'verifying' | 'ready-to-activate' | 'activating' | 'active'
+export interface OfflineJob {
+  job_id: string
+  content_version: string
+  manifest_fingerprint: string
+  cache_name: string
+  status: OfflineJobStatus
+  bytes_total: number
+  bytes_done: number
+  files_total: number
+  files_done: number
+  current_path: string | null
+  error_code: string | null
+  error_message: string | null
+  created_at: string
+  updated_at: string
+}
+export interface OfflineFile {
+  job_id: string
+  path: string
+  kind: string
+  bytes: number
+  sha256: string
+  status: 'pending' | 'downloading' | 'complete' | 'failed'
+  attempts: number
+  error_message: string | null
+  updated_at: string
+}
+export type AppMetaKey = 'offline.active' | 'offline.last-check' | 'backup.preferences' | 'backup.last-success' | 'backup.mutation-count' | 'install.guidance'
+export interface AppMetaRecord { key: AppMetaKey; value: unknown; updated_at: string }
+
+export const DATABASE_VERSION = 3
 
 export const defaultReaderPreferences: ReaderPreferences = {
   fontSize: 18, lineHeight: 1.75, paragraphSpacing: 0.85, gutter: 20, contentWidth: 720,
@@ -109,6 +141,9 @@ export class MyriadAtlasDatabase extends Dexie {
   questionDrafts!: Table<QuestionDraft, string>
   pendingRemovals!: Table<PendingRemoval, string>
   opinions!: Table<Opinion, string>
+  offlineJobs!: Table<OfflineJob, string>
+  offlineFiles!: Table<OfflineFile, [string, string]>
+  appMeta!: Table<AppMetaRecord, AppMetaKey>
 
   constructor(name = 'myriad-atlas') {
     super(name)
@@ -124,6 +159,22 @@ export class MyriadAtlasDatabase extends Dexie {
     }).upgrade(async (transaction) => {
       await transaction.table<NodeState, string>('nodeStates').toCollection().modify((record) => {
         Object.assign(record, normalizeNodeState(record))
+      })
+    })
+    this.version(DATABASE_VERSION).stores({
+      settings: '&key',
+      nodeStates: '&node_id, completed, favorite, unknown, uninterested, updated_at',
+      routePositions: '&route_id, updated_at',
+      questionChains: '&chain_id, root_node_id, status, updated_at',
+      questionDrafts: '&draft_id, chain_id, status, updated_at',
+      pendingRemovals: '&id, kind, target_id, updated_at',
+      opinions: '&id, scope, route_id, updated_at',
+      offlineJobs: '&job_id, [content_version+manifest_fingerprint], status, updated_at',
+      offlineFiles: '[job_id+path], job_id, status, updated_at',
+      appMeta: '&key, updated_at',
+    }).upgrade(async (transaction) => {
+      await transaction.table<PendingRemoval, string>('pendingRemovals').toCollection().modify((record) => {
+        if (record.previous_status && !['draft', 'awaiting-import', 'answered', 'id-conflict'].includes(record.previous_status)) delete record.previous_status
       })
     })
   }
@@ -149,4 +200,14 @@ export async function saveReadingProgress(nodeId: string, ratio: number, anchor:
     reading_progress: { ratio: safeRatio, anchor: safeAnchor, updated_at: now },
     updated_at: now,
   }))
+}
+
+export async function normalizeInterruptedOfflineJobs(database = readerDb): Promise<void> {
+  const timestamp = new Date().toISOString()
+  await database.transaction('rw', database.offlineJobs, database.offlineFiles, async () => {
+    await database.offlineJobs.where('status').equals('downloading').modify({
+      status: 'paused', error_code: 'interrupted', error_message: '下载在上次关闭时中断。', current_path: null, updated_at: timestamp,
+    })
+    await database.offlineFiles.where('status').equals('downloading').modify({ status: 'pending', updated_at: timestamp })
+  })
 }

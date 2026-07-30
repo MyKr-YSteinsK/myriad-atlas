@@ -5,8 +5,9 @@
 - `src/main.tsx`：React 启动入口；`src/app/router.tsx`：HashRouter。
 - `src/app/App.tsx`、`layout/` 与 `pages/`：五项导航、首页、路线、知识库、搜索、漫游、“我的”和节点路由。
 - `src/lib/base-path.ts`：项目子路径与 Hash URL 的唯一解析入口；`src/lib/content-client.ts` / `search-repository.ts`：可失效重载的 ContentRepository 与 Pagefind SearchRepository。
-- `src/app/reader/`：沉浸阅读器、设置面板、阅读设置生命周期 flush 及仅开发环境的长文样本；`src/app/state/reader-db.ts`：保留 v1 迁移链的 Dexie v2 数据库与表定义。
-- `src/app/state/local-state.ts`：节点状态、路线位置、问题草稿、待删除和意见的唯一写入服务与同标签页 revision 订阅。
+- `src/app/reader/`：沉浸阅读器、设置面板、阅读设置生命周期 flush 及仅开发环境的长文样本；`src/app/state/reader-db.ts`：保留 v1 / v2 迁移链的 Dexie v3 数据库，包含个人状态、离线任务/文件和应用元数据表。
+- `src/app/state/local-state.ts`：节点状态、路线位置、问题草稿、待删除、意见、阅读设置和应用偏好的唯一写入服务；个人写入统一维护备份 mutation count，同标签页 revision 订阅不跟踪下载进度。
+- `src/pwa/`：可安装外壳、Service Worker 注册/更新生命周期、安装指引、Cache Storage 活动版本指针与 Dexie UI 镜像协调。离线内容的活动版本始终以 Cache Storage pointer 为准。
 - `src/app/data/route-progress.ts`：路线进度与继续算法；`question-chains.ts`：QA ID、原子问题链创建、绑定和生成请求；`roaming.ts`：漫游池与安全随机。
 - `src/app/styles/global.css`：主题 token、safe area、减少动态效果与阅读排版。
 
@@ -27,7 +28,7 @@
 - `public/_generated/qa-index.json`：线性正式问题链索引；`npm run content:fixture` / `dev:fixture`：仅从测试语料生成本地非空运行时数据。
 - `scripts/content/build-knowledge-map.ts` → `generated/knowledge-map.md`：可提交的确定性知识地图。
 - `generated/imported-batches.json`：可提交的空批次索引；`inbox/`：本地批次与报告目录。
-- `dist/`：Vite 部署产物，不提交。
+- `dist/`：Vite 部署产物，不提交；`npm run build` 同时注入 `dist/sw.js` 的应用外壳预缓存，运行时知识内容不进入该预缓存。
 
 ## 命令与部署
 
@@ -39,4 +40,4 @@
 
 ## 后续预留
 
-完整 PWA/Workbox、备份恢复、更新管理与 ZIP 批次导入尚未实现。
+完整知识离线下载、备份恢复与 ZIP 批次导入尚未实现。

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { defaultReaderPreferences, loadReaderPreferences, saveReaderPreferences, type ReaderPreferences } from '../state/reader-db'
+import { defaultReaderPreferences, loadReaderPreferences, type ReaderPreferences } from '../state/reader-db'
+import { localState } from '../state/local-state'
 
 const SAVE_DELAY_MS = 250
 
@@ -27,7 +28,7 @@ export function useReaderPreferencePersistence() {
     const pending = pendingRef.current
     if (!pending) return
     pendingRef.current = undefined
-    savesRef.current = savesRef.current.catch(() => undefined).then(() => saveReaderPreferences(pending)).catch((reason: unknown) => {
+    savesRef.current = savesRef.current.catch(() => undefined).then(() => localState.saveReaderPreferences(pending)).catch((reason: unknown) => {
       reportFailure()
       throw reason
     })

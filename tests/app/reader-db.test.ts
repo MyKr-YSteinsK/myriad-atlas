@@ -2,14 +2,16 @@ import Dexie from 'dexie'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   defaultReaderPreferences,
+  DATABASE_VERSION,
   loadReaderPreferences,
   MyriadAtlasDatabase,
+  normalizeInterruptedOfflineJobs,
   readerDb,
   saveReaderPreferences,
   saveReadingProgress,
 } from '../../src/app/state/reader-db'
 
-describe('reader IndexedDB v2', () => {
+describe('reader IndexedDB v3', () => {
   beforeEach(async () => {
     await readerDb.delete()
     await readerDb.open()
@@ -55,6 +57,51 @@ describe('reader IndexedDB v2', () => {
       'routePositions', 'questionChains', 'questionDrafts', 'pendingRemovals', 'opinions',
     ]))
     migrated.close()
+  })
+
+  it('upgrades v2 personal tables without clearing them and initializes v3 offline metadata', async () => {
+    const name = `myriad-v2-${Date.now()}`
+    const legacy = new Dexie(name)
+    legacy.version(1).stores({ settings: '&key', nodeStates: '&node_id, updated_at' })
+    legacy.version(2).stores({
+      settings: '&key', nodeStates: '&node_id, completed, favorite, unknown, uninterested, updated_at',
+      routePositions: '&route_id, updated_at', questionChains: '&chain_id, root_node_id, status, updated_at',
+      questionDrafts: '&draft_id, chain_id, status, updated_at', pendingRemovals: '&id, kind, target_id, updated_at', opinions: '&id, scope, route_id, updated_at',
+    })
+    await legacy.open()
+    await legacy.table('nodeStates').put({ node_id: 'legacy-v2', completed: true, updated_at: 'old' })
+    await legacy.table('pendingRemovals').put({ id: 'legacy-removal', kind: 'qa-chain', target_id: 'qa-0001', root_node_id: 'node', note: '', previous_status: 'hidden', created_at: 'old', updated_at: 'old' })
+    legacy.close()
+
+    const migrated = new MyriadAtlasDatabase(name)
+    await migrated.open()
+    expect(DATABASE_VERSION).toBe(3)
+    expect(await migrated.nodeStates.get('legacy-v2')).toMatchObject({ completed: true, updated_at: 'old' })
+    expect(await migrated.pendingRemovals.get('legacy-removal')).not.toHaveProperty('previous_status')
+    expect(await migrated.offlineJobs.count()).toBe(0)
+    expect(await migrated.offlineFiles.count()).toBe(0)
+    expect(await migrated.appMeta.count()).toBe(0)
+    migrated.close()
+    const reopened = new MyriadAtlasDatabase(name)
+    await reopened.open()
+    expect(await reopened.nodeStates.get('legacy-v2')).toMatchObject({ completed: true })
+    reopened.close()
+    await Dexie.delete(name)
+  })
+
+  it('normalizes interrupted downloads without changing completed files', async () => {
+    await readerDb.offlineJobs.put({
+      job_id: 'job', content_version: '2026.07.30-01', manifest_fingerprint: 'f'.repeat(64), cache_name: 'content-job', status: 'downloading',
+      bytes_total: 10, bytes_done: 5, files_total: 2, files_done: 1, current_path: '_generated/catalog.json', error_code: null, error_message: null, created_at: 'old', updated_at: 'old',
+    })
+    await readerDb.offlineFiles.bulkPut([
+      { job_id: 'job', path: '_generated/catalog.json', kind: 'catalog', bytes: 5, sha256: 'a'.repeat(64), status: 'downloading', attempts: 1, error_message: null, updated_at: 'old' },
+      { job_id: 'job', path: '_generated/routes.json', kind: 'routes-index', bytes: 5, sha256: 'b'.repeat(64), status: 'complete', attempts: 1, error_message: null, updated_at: 'old' },
+    ])
+    await normalizeInterruptedOfflineJobs()
+    expect(await readerDb.offlineJobs.get('job')).toMatchObject({ status: 'paused', error_code: 'interrupted', current_path: null })
+    expect(await readerDb.offlineFiles.get(['job', '_generated/catalog.json'])).toMatchObject({ status: 'pending' })
+    expect(await readerDb.offlineFiles.get(['job', '_generated/routes.json'])).toMatchObject({ status: 'complete' })
   })
 
   it('rolls back an upgrade transaction that throws', async () => {
