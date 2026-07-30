@@ -54,6 +54,9 @@ export const localState = {
   listQuestionDrafts: (): Promise<QuestionDraft[]> => readerDb.questionDrafts.toArray(),
   listPendingRemovals: (): Promise<PendingRemoval[]> => readerDb.pendingRemovals.toArray(),
   listOpinions: (): Promise<Opinion[]> => readerDb.opinions.toArray(),
+  listOfflineJobs: (): Promise<OfflineJob[]> => readerDb.offlineJobs.toArray(),
+  getOfflineJob: (jobId: string): Promise<OfflineJob | undefined> => readerDb.offlineJobs.get(jobId),
+  listOfflineFiles: (jobId: string): Promise<OfflineFile[]> => readerDb.offlineFiles.where('job_id').equals(jobId).toArray(),
   getAppMeta: async <T>(key: AppMetaKey): Promise<T | undefined> => (await readerDb.appMeta.get(key))?.value as T | undefined,
   getMutationCount: async (): Promise<number> => {
     const value = await localState.getAppMeta<unknown>('backup.mutation-count')
@@ -74,6 +77,7 @@ export const localState = {
     changed()
   },
   saveOfflineJob: async (job: OfflineJob): Promise<void> => { await readerDb.offlineJobs.put(job) },
+  saveOfflineFile: async (file: OfflineFile): Promise<void> => { await readerDb.offlineFiles.put(file) },
   saveOfflineFiles: async (files: OfflineFile[]): Promise<void> => { await readerDb.offlineFiles.bulkPut(files) },
   deleteNodeState: async (nodeId: string): Promise<void> => {
     await mutatePersonalState([readerDb.nodeStates], () => readerDb.nodeStates.delete(nodeId))
