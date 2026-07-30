@@ -11,11 +11,14 @@ describe('runtime content artifacts', () => {
     const root = resolve(process.cwd(), 'public/_generated')
     const catalog = JSON.parse(await readFile(resolve(root, 'catalog.json'), 'utf8')) as { nodes: unknown[] }
     const searchStatus = JSON.parse(await readFile(resolve(root, 'search-status.json'), 'utf8')) as { available: boolean; reason: string }
-    const manifest = JSON.parse(await readFile(resolve(root, 'content-manifest.json'), 'utf8')) as { files: Array<{ path: string }> }
+    const qaIndex = JSON.parse(await readFile(resolve(root, 'qa-index.json'), 'utf8')) as { chains: unknown[] }
+    const manifest = JSON.parse(await readFile(resolve(root, 'content-manifest.json'), 'utf8')) as { files: Array<{ path: string; kind: string }> }
 
     expect(catalog.nodes).toEqual([])
+    expect(qaIndex.chains).toEqual([])
     expect(searchStatus).toEqual({ schema_version: 1, available: false, reason: 'empty-corpus' })
     expect(manifest.files.map((file) => file.path)).not.toContain('_generated/content-manifest.json')
+    expect(manifest.files).toContainEqual(expect.objectContaining({ path: '_generated/qa-index.json', kind: 'qa-index' }))
   })
 
   it('renders a deterministic knowledge map for the empty formal library', async () => {

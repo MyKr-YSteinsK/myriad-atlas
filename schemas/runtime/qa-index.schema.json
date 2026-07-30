@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://myriad-atlas.dev/schemas/runtime/qa-index.schema.json",
+  "title": "Runtime QA chain index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "content_version", "chains"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "content_version": { "type": "string", "minLength": 1 },
+    "chains": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["chain_id", "root_node_id", "answers"],
+        "properties": {
+          "chain_id": { "type": "string", "pattern": "^qa-[0-9]{4}$" },
+          "root_node_id": { "type": "string", "minLength": 1 },
+          "answers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["node_id", "parent_node_id", "prompt", "title", "source_content_version", "node_path"],
+              "properties": {
+                "node_id": { "type": "string", "minLength": 1 },
+                "parent_node_id": { "type": ["string", "null"] },
+                "prompt": { "type": "string", "minLength": 1 },
+                "title": { "type": "string", "minLength": 1 },
+                "source_content_version": { "type": "string", "minLength": 1 },
+                "node_path": { "type": "string", "pattern": "^_generated/nodes/[a-z0-9-]+\\.json$" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

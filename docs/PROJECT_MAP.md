@@ -18,10 +18,11 @@
 
 ## 生成数据流
 
-`src/content` / `src/data` → 联合校验 → 节点 JSON → taxonomy、catalog、路线 → Pagefind 或空库搜索状态 → manifest。
+`src/content` / `src/data` → 联合校验 → staging 中的节点、taxonomy、catalog、路线、QA 索引 → Pagefind 或空库搜索状态 → manifest 校验 → `_generated` 整体切换。
 
 - `scripts/content/build-all.ts`：运行时产物总构建。
 - `public/_generated/`：运行时 JSON 和 Pagefind，构建生成且不提交。
+- `public/_generated/qa-index.json`：线性正式问题链索引；`npm run content:fixture` / `dev:fixture`：仅从测试语料生成本地非空运行时数据。
 - `scripts/content/build-knowledge-map.ts` → `generated/knowledge-map.md`：可提交的确定性知识地图。
 - `generated/imported-batches.json`：可提交的空批次索引；`inbox/`：本地批次与报告目录。
 - `dist/`：Vite 部署产物，不提交。

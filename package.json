@@ -17,6 +17,8 @@
     "verify": "npm run lint && npm run typecheck && vitest run && npm run build",
     "content:validate": "tsx scripts/content/validate-source.ts",
     "content:build": "tsx scripts/content/build-all.ts",
+    "content:fixture": "tsx scripts/dev/build-fixture-content.ts",
+    "dev:fixture": "npm run content:fixture && vite",
     "content:map": "tsx scripts/content/build-knowledge-map.ts",
     "content:map:check": "tsx scripts/content/build-knowledge-map.ts --check"
   },

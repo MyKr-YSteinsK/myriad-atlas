@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import Ajv2020 from 'ajv/dist/2020.js'
 import { parse } from 'yaml'
-import { generatedRoot, repoRoot, schemasRoot } from './config'
+import { defaultContentWorkspace, generatedRoot, type ContentWorkspace } from './config'
 import { compileAnswerMarkdown, compileMarkdown, type TocEntry } from './compile-markdown'
 import type { Taxonomy, SourceNode, ValidationResult } from './validate-source'
 import { validateSource } from './validate-source'
@@ -31,8 +31,8 @@ export interface RuntimeNode {
   qa?: SourceNode['data']['qa']
 }
 
-export async function contentVersion(): Promise<string> {
-  const log = parse(await readFile(resolve(repoRoot, 'src/data/changelog/knowledge.yaml'), 'utf8')) as { current_version?: unknown }
+export async function contentVersion(workspace: ContentWorkspace = defaultContentWorkspace): Promise<string> {
+  const log = parse(await readFile(resolve(workspace.dataRoot, 'changelog/knowledge.yaml'), 'utf8')) as { current_version?: unknown }
   if (typeof log.current_version !== 'string' || !log.current_version) throw new Error('Knowledge changelog has no current_version')
   return log.current_version
 }
@@ -95,12 +95,14 @@ async function replaceNodesDirectory(tempDirectory: string): Promise<void> {
   }
 }
 
-export async function buildNodes(result?: ValidationResult): Promise<RuntimeNode[]> {
-  const validation = result ?? await validateSource()
+export async function compileNodes(
+  validation: ValidationResult,
+  version: string,
+  workspace: ContentWorkspace = defaultContentWorkspace,
+): Promise<RuntimeNode[]> {
   const errors = validation.issues.filter((entry) => entry.severity === 'error')
   if (errors.length > 0 || !validation.taxonomy) throw new Error(errors.map((entry) => `${entry.code}: ${entry.message}`).join('\n') || 'Taxonomy validation failed')
-  const version = await contentVersion()
-  const schema = JSON.parse(await readFile(resolve(schemasRoot, 'runtime/node.schema.json'), 'utf8')) as object
+  const schema = JSON.parse(await readFile(resolve(workspace.schemasRoot, 'runtime/node.schema.json'), 'utf8')) as object
   const validator = new Ajv2020({ allErrors: true, strict: true }).compile(schema)
   const nodes = await Promise.all([...validation.nodes].sort((left, right) => left.sourcePath.localeCompare(right.sourcePath)).map(
     (node) => compileNode(node, validation.taxonomy!, version),
@@ -109,6 +111,13 @@ export async function buildNodes(result?: ValidationResult): Promise<RuntimeNode
     const nodeId = node.id
     if (!validator(node)) throw new Error(`Runtime node schema failed for ${nodeId}: ${validator.errors?.[0]?.message ?? 'unknown error'}`)
   }
+  return nodes
+}
+
+export async function buildNodes(result?: ValidationResult): Promise<RuntimeNode[]> {
+  const validation = result ?? await validateSource()
+  const version = await contentVersion()
+  const nodes = await compileNodes(validation, version)
   await mkdir(generatedRoot, { recursive: true })
   const tempDirectory = resolve(generatedRoot, `.nodes-${process.pid}`)
   await rm(tempDirectory, { recursive: true, force: true })
