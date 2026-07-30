@@ -18,9 +18,11 @@ describe('immersive reader', () => {
     render(<MemoryRouter><ReaderPage node={previewNode} catalog={{ schema_version: 1, content_version: 'preview', nodes: [] }} /></MemoryRouter>)
     const body = document.querySelector('.reader-body')!
     const takeaways = screen.getByRole('heading', { name: '要点' })
+    const actions = screen.getByRole('heading', { name: '节点状态' })
     const details = screen.getByText('为什么答案默认折叠？').closest('details')!
 
     expect(body.compareDocumentPosition(takeaways) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(takeaways.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(details).not.toHaveAttribute('open')
     await userEvent.click(screen.getByText('为什么答案默认折叠？'))
     expect(details).toHaveAttribute('open')

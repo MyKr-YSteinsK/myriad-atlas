@@ -4,6 +4,7 @@ import type { RuntimeCatalog, RuntimeNode } from '../../content/types'
 import { defaultReaderPreferences, loadReaderPreferences, saveReaderPreferences, type ReaderPreferences } from '../state/reader-db'
 import { localState } from '../state/local-state'
 import { ReaderSettings } from './ReaderSettings'
+import { NodeActions } from './NodeActions'
 
 interface ReaderPageProps { node: RuntimeNode; catalog?: RuntimeCatalog }
 
@@ -154,6 +155,7 @@ export function ReaderPage({ node, catalog }: ReaderPageProps) {
       {node.self_check.length > 0 && <section className="reader-self-check" aria-labelledby="self-check-title"><h2 id="self-check-title">自检</h2>{node.self_check.map((check) => <details key={check.question}><summary>{check.question}</summary><div dangerouslySetInnerHTML={{ __html: check.answer_html }} /></details>)}</section>}
       {resolveReferences(node.prerequisites, '前置节点')}
       {resolveReferences(node.related, '关联节点')}
+      <NodeActions node={node} catalog={catalog} />
     </article>
     <ReaderSettings open={settingsOpen} preferences={preferences} onChange={updatePreferences} onReset={resetPreferences} onClose={() => setSettingsOpen(false)} triggerRef={settingsButton} />
   </main>

@@ -10,5 +10,4 @@ function StatePage({ title, emptyText }: { title: string; emptyText: string }) {
   </section>
 }
 
-export function RoamingPage() { return <StatePage title="随机漫游" emptyText="当前没有漫游内容。" /> }
 export function MePage() { return <StatePage title="我的" emptyText="尚无个人状态。" /> }

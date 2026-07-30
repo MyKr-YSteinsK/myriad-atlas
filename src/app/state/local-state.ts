@@ -66,6 +66,33 @@ export const localState = {
     value.uninterested_note = note.trim()
     value.uninterested_at = timestamp
   }),
+  markRoamingUninterested: async (nodeId: string, note: string): Promise<void> => {
+    await readerDb.transaction('rw', readerDb.nodeStates, readerDb.pendingRemovals, async () => {
+      const value = await readerDb.nodeStates.get(nodeId) ?? emptyNodeState(nodeId)
+      const timestamp = now()
+      value.uninterested = true
+      value.uninterested_note = note.trim()
+      value.uninterested_at = timestamp
+      value.updated_at = timestamp
+      await readerDb.nodeStates.put(value)
+      await readerDb.pendingRemovals.put({
+        id: `roaming-node:${nodeId}`, kind: 'roaming-node', target_id: nodeId, root_node_id: null,
+        note: note.trim(), created_at: timestamp, updated_at: timestamp,
+      })
+    })
+    changed()
+  },
+  undoRoamingUninterested: async (nodeId: string): Promise<void> => {
+    await readerDb.transaction('rw', readerDb.nodeStates, readerDb.pendingRemovals, async () => {
+      const value = await readerDb.nodeStates.get(nodeId)
+      if (value) {
+        value.uninterested = false; value.uninterested_note = ''; value.uninterested_at = null; value.updated_at = now()
+        await readerDb.nodeStates.put(value)
+      }
+      await readerDb.pendingRemovals.delete(`roaming-node:${nodeId}`)
+    })
+    changed()
+  },
   clearUninterested: (nodeId: string): Promise<NodeState> => updateNode(nodeId, (value) => {
     value.uninterested = false
     value.uninterested_note = ''

@@ -37,7 +37,7 @@ describe('local state repository', () => {
   })
 
   it('stores route position, uninterested state and CRUD records', async () => {
-    await localState.setUninterested('roaming', '不需要')
+    await localState.markRoamingUninterested('roaming', '不需要')
     await localState.saveRoutePosition({ route_id: 'route', stage_id: 'stage', module_id: 'module', node_id: 'node' })
     await localState.savePendingRemoval({
       id: 'removal', kind: 'roaming-node', target_id: 'roaming', root_node_id: null,
@@ -49,7 +49,11 @@ describe('local state repository', () => {
     expect(await readerDb.nodeStates.get('roaming')).toMatchObject({ uninterested: true })
     expect(await readerDb.routePositions.get('route')).toMatchObject({ node_id: 'node' })
     expect(await readerDb.pendingRemovals.get('removal')).toBeTruthy()
+    expect(await readerDb.pendingRemovals.get('roaming-node:roaming')).toBeTruthy()
     expect(await readerDb.opinions.get('opinion')).toBeTruthy()
+    await localState.undoRoamingUninterested('roaming')
+    expect(await readerDb.nodeStates.get('roaming')).toMatchObject({ uninterested: false })
+    expect(await readerDb.pendingRemovals.get('roaming-node:roaming')).toBeUndefined()
   })
 
   it('enforces one pending draft per question chain transactionally', async () => {
