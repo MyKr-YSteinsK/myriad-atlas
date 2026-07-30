@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://myriad-atlas.dev/schemas/source/taxonomy.schema.json",
+  "title": "Knowledge taxonomy source",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "domains"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "domains": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "courses"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+          "name": { "$ref": "#/$defs/displayName" },
+          "courses": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "name"],
+              "properties": {
+                "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+                "name": { "$ref": "#/$defs/displayName" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": { "displayName": { "type": "string", "minLength": 1, "pattern": "^\\S(?:.*\\S)?$" } }
+}

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://myriad-atlas.dev/schemas/source/app-changelog.schema.json",
+  "title": "Application changelog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "current_version", "entries"],
+  "properties": { "schema_version": { "const": 1 }, "current_version": { "type": "string", "minLength": 1 }, "entries": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["version", "date", "summary"], "properties": { "version": { "type": "string", "minLength": 1 }, "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }, "summary": { "type": "string", "minLength": 1 } } } } }
+}
