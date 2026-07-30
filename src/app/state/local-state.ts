@@ -1,5 +1,5 @@
 import type { Table } from 'dexie'
-import { readerDb, saveReadingProgress, type AppMetaKey, type LocalQuestionChain, type NodeState, type OfflineFile, type OfflineJob, type Opinion, type PendingRemoval, type QuestionDraft, type ReaderPreferences, type RoutePosition } from './reader-db'
+import { readerDb, saveReadingProgress, type AppMetaKey, type AppMetaRecord, type LocalQuestionChain, type NodeState, type OfflineFile, type OfflineJob, type Opinion, type PendingRemoval, type QuestionDraft, type ReaderPreferences, type ReaderSettingsRecord, type RoutePosition } from './reader-db'
 
 const listeners = new Set<() => void>()
 let revision = 0
@@ -28,6 +28,17 @@ function emptyNodeState(nodeId: string): NodeState {
     unknown: false, unknown_note: '', unknown_updated_at: null, uninterested: false,
     uninterested_note: '', uninterested_at: null, reading_progress: null, updated_at: now(),
   }
+}
+
+export interface PersonalStateReplacement {
+  settings: ReaderSettingsRecord[]
+  node_states: NodeState[]
+  route_positions: RoutePosition[]
+  question_chains: LocalQuestionChain[]
+  question_drafts: QuestionDraft[]
+  pending_removals: PendingRemoval[]
+  opinions: Opinion[]
+  app_preferences: AppMetaRecord[]
 }
 
 async function updateNode(nodeId: string, update: (value: NodeState, timestamp: string) => void): Promise<NodeState> {
@@ -80,6 +91,29 @@ export const localState = {
     await readerDb.transaction('rw', readerDb.appMeta, async () => {
       await readerDb.appMeta.put({ key: 'backup.last-success', value: timestamp, updated_at: timestamp })
       await readerDb.appMeta.put({ key: 'backup.mutation-count', value: 0, updated_at: timestamp })
+    })
+    changed()
+  },
+  replacePersonalData: async (replacement: PersonalStateReplacement): Promise<void> => {
+    await readerDb.transaction('rw', [readerDb.settings, readerDb.nodeStates, readerDb.routePositions, readerDb.questionChains, readerDb.questionDrafts, readerDb.pendingRemovals, readerDb.opinions, readerDb.appMeta], async () => {
+      await Promise.all([readerDb.settings.clear(), readerDb.nodeStates.clear(), readerDb.routePositions.clear(), readerDb.questionChains.clear(), readerDb.questionDrafts.clear(), readerDb.pendingRemovals.clear(), readerDb.opinions.clear()])
+      await readerDb.appMeta.bulkDelete(['backup.preferences', 'install.guidance'])
+      await readerDb.settings.bulkPut(replacement.settings)
+      await readerDb.nodeStates.bulkPut(replacement.node_states)
+      await readerDb.routePositions.bulkPut(replacement.route_positions)
+      await readerDb.questionChains.bulkPut(replacement.question_chains)
+      await readerDb.questionDrafts.bulkPut(replacement.question_drafts)
+      await readerDb.pendingRemovals.bulkPut(replacement.pending_removals)
+      await readerDb.opinions.bulkPut(replacement.opinions)
+      await readerDb.appMeta.bulkPut(replacement.app_preferences)
+      await readerDb.appMeta.put({ key: 'backup.mutation-count', value: 0, updated_at: now() })
+    })
+    changed()
+  },
+  clearPersonalData: async (): Promise<void> => {
+    await readerDb.transaction('rw', [readerDb.settings, readerDb.nodeStates, readerDb.routePositions, readerDb.questionChains, readerDb.questionDrafts, readerDb.pendingRemovals, readerDb.opinions, readerDb.appMeta], async () => {
+      await Promise.all([readerDb.settings.clear(), readerDb.nodeStates.clear(), readerDb.routePositions.clear(), readerDb.questionChains.clear(), readerDb.questionDrafts.clear(), readerDb.pendingRemovals.clear(), readerDb.opinions.clear()])
+      await readerDb.appMeta.bulkDelete(['backup.preferences', 'install.guidance', 'backup.last-success', 'backup.mutation-count'])
     })
     changed()
   },

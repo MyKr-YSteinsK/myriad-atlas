@@ -29,7 +29,7 @@ jobs:
       - name: Verify fixture and production isolation
         run: |
           npm run content:fixture
-          npm run test -- --run tests/content/search.test.ts
+          npm run test -- --run tests/content/search.test.ts tests/pwa tests/backup
           npm run build
       - name: Check deployment artifact boundary
         run: |
@@ -46,6 +46,10 @@ jobs:
           test -f dist/icons/apple-touch-icon-180.png
           if rg -F 'self.__WB_MANIFEST' dist/sw.js; then
             echo 'Service Worker precache manifest was not injected.'
+            exit 1
+          fi
+          if find dist -path '*/tests/fixtures/*' -o -name '*fixture*' | grep -q .; then
+            echo 'Fixture data leaked into production dist.'
             exit 1
           fi
           if find dist -type f \( -name '*.md' -o -path '*/tests/*' -o -path '*/schemas/*' \) | grep -q .; then

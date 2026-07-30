@@ -1,6 +1,6 @@
 export type ContentVersionComparison = 'older' | 'equal' | 'newer' | 'fingerprint-mismatch'
 
-export const APP_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '0.1.0'
+export const APP_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '0.2.0'
 export const DATA_FORMAT_VERSION = typeof __DATA_FORMAT_VERSION__ === 'number' ? __DATA_FORMAT_VERSION__ : 1
 
 export function parseContentVersion(value: string): { year: number; month: number; day: number; sequence: number } | undefined {

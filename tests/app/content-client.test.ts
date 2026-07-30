@@ -9,7 +9,7 @@ const emptyTaxonomy = { schema_version: 1, content_version: version, domains: []
 const emptyRoutes = { schema_version: 1, content_version: version, routes: [] }
 const emptyQa = { schema_version: 1, content_version: version, chains: [] }
 const emptyManifest = { schema_version: 1, content_version: version, base_path: '/myriad-atlas/', files: [] }
-const appLog = { schema_version: 1, current_version: '0.1.0', entries: [{ version: '0.1.0', date: '2026-07-30', summary: 'initial' }] }
+const appLog = { schema_version: 1, current_version: '0.2.0', entries: [{ version: '0.2.0', date: '2026-07-30', summary: 'current' }] }
 const knowledgeLog = { schema_version: 1, current_version: version, entries: [{ version, date: '2026-07-30', summary: 'initial', categories: [], added_nodes: [], modified_nodes: [], deleted_nodes: [] }] }
 
 function json(value: unknown, status = 200): Response {
@@ -95,7 +95,7 @@ describe('runtime content repositories', () => {
       .mockResolvedValueOnce(json(appLog))
       .mockResolvedValueOnce(json(knowledgeLog))
       .mockResolvedValueOnce(json(emptyCatalog)))
-    await expect(repository.loadAppChangelog()).resolves.toMatchObject({ current_version: '0.1.0' })
+    await expect(repository.loadAppChangelog()).resolves.toMatchObject({ current_version: '0.2.0' })
     await expect(repository.loadKnowledgeChangelog()).resolves.toMatchObject({ current_version: version })
   })
 })

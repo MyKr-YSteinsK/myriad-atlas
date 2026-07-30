@@ -16,7 +16,7 @@ import { listContentCaches, readActivePointer, type ContentCacheStorage } from '
 import { type ActiveContentPointer } from '../../pwa/cache-protocol'
 import { localState } from '../state/local-state'
 import { useAppUpdate } from '../../pwa/app-update-context'
-import { exportPersonalBackup, getBackupReminderState, setBackupReminderEnabled, type BackupReminderState } from '../backup/personal-backup'
+import { applyPersonalRestore, clearAllPersonalData, exportPersonalBackup, getBackupReminderState, preparePersonalRestore, readPersonalBackupFile, setBackupReminderEnabled, type BackupReminderState, type PreparedRestore } from '../backup/personal-backup'
 
 type Runtime = { storage: ContentCacheStorage; download: ContentDownloadManager; checker: KnowledgeUpdateChecker }
 
@@ -160,6 +160,7 @@ export function StoragePage() {
   const [info, setInfo] = useState<{ usage?: number; quota?: number; content?: number; candidates?: number }>()
   const [verification, setVerification] = useState<ActiveContentVerification>()
   const [message, setMessage] = useState<string>()
+  const [clearConfirm, setClearConfirm] = useState('')
   const refresh = useCallback(async () => {
     if (!runtime) return
     const estimate = await navigator.storage?.estimate?.().catch(() => undefined)
@@ -185,6 +186,7 @@ export function StoragePage() {
     <dl className="offline-overview"><div><dt>浏览器已用空间</dt><dd>{displayBytes(info?.usage)}</dd></div><div><dt>浏览器配额</dt><dd>{displayBytes(info?.quota)}</dd></div><div><dt>活动知识缓存</dt><dd>{displayBytes(info?.content)}</dd></div><div><dt>候选 / 孤儿缓存</dt><dd>{displayBytes(info?.candidates)}</dd></div><div><dt>个人 IndexedDB 记录</dt><dd>{local.nodeStates.length + local.questionChains.length + local.questionDrafts.length + local.pendingRemovals.length + local.opinions.length}</dd></div></dl>
     {verification && <p role="status">{verification.status}：{verification.message}</p>}{message && <p role="status">{message}</p>}
     <div className="offline-actions"><button type="button" disabled={!runtime} onClick={() => { if (runtime) void verifyActiveContent(runtime.storage).then(setVerification) }}>验证知识完整性</button><button type="button" disabled={!runtime} onClick={() => { if (runtime) void cleanupTemporaryContentCaches(runtime.storage).then((removed) => { setMessage(`已清理 ${removed.length} 个临时内容缓存。`); void refresh() }) }}>清理临时缓存</button><Link to="/me/offline">重新下载知识库</Link><Link to="/me/backups">备份与恢复</Link></div>
+    <section className="clear-personal-data"><h2>清除全部个人数据</h2><p>建议先导出备份。此操作只删除个人状态和偏好，不删除离线知识、Service Worker 或应用外壳。</p><label>输入“清除”以确认<input value={clearConfirm} onChange={(event) => setClearConfirm(event.target.value)} /></label><button type="button" disabled={clearConfirm !== '清除'} onClick={() => void clearAllPersonalData().then(() => { setClearConfirm(''); setMessage('已清除全部个人数据；离线知识保持不变。') })}>清除个人数据</button></section>
     <p className="offline-note">清理临时缓存不会清除 active 知识、Service Worker 或个人数据。</p>
   </section>
 }
@@ -195,6 +197,8 @@ export function BackupPage() {
   const [reminder, setReminder] = useState<BackupReminderState>()
   const [message, setMessage] = useState<string>()
   const [exporting, setExporting] = useState(false)
+  const [prepared, setPrepared] = useState<PreparedRestore>()
+  const [restoreReady, setRestoreReady] = useState(false)
   const knowledgeVersion = state.status === 'ready' || state.status === 'empty' ? state.data.contentVersion : 'unknown'
   const refresh = useCallback(() => getBackupReminderState(knowledgeVersion).then(setReminder).catch(() => undefined), [knowledgeVersion])
   useEffect(() => { void refresh() }, [refresh, local.nodeStates, local.questionChains, local.questionDrafts, local.opinions, local.pendingRemovals])
@@ -203,13 +207,31 @@ export function BackupPage() {
     try {
       const result = await exportPersonalBackup(knowledgeVersion)
       setMessage(result.method === 'shared' ? '已启动系统分享，备份提醒已重置。' : '已启动 JSON 下载，备份提醒已重置。')
+      setRestoreReady(true)
       await refresh()
     } catch (reason) { setMessage(reason instanceof Error ? `备份未导出：${reason.message}` : '备份未导出。') } finally { setExporting(false) }
+  }
+  const selectRestoreFile = async (file: File | undefined): Promise<void> => {
+    if (!file || state.status === 'loading' || state.status === 'error') return
+    setMessage(undefined); setPrepared(undefined)
+    try {
+      const backup = await readPersonalBackupFile(file)
+      const nodeIds = new Set(state.data.catalog.nodes.map((node) => node.id))
+      const tocEntries = await Promise.all(backup.data.node_states.filter((entry) => nodeIds.has(entry.node_id)).map(async (entry) => {
+        try { return [entry.node_id, new Set((await contentRepository.loadNode(entry.node_id)).toc.map((item) => item.id))] as const } catch { return [entry.node_id, new Set<string>()] as const }
+      }))
+      setPrepared(preparePersonalRestore(backup, { appVersion: APP_VERSION, knowledgeVersion, nodeIds, routeIds: state.data.routes.routes.map((route) => route.id), tocIdsByNode: new Map(tocEntries) }))
+    } catch (reason) { setMessage(reason instanceof Error ? reason.message : '无法读取备份文件。') }
+  }
+  const restore = async (): Promise<void> => {
+    if (!prepared) return
+    if (!restoreReady && (local.nodeStates.length + local.questionChains.length + local.questionDrafts.length + local.pendingRemovals.length + local.opinions.length > 0)) { setMessage('请先成功启动当前数据的备份导出，再执行恢复。'); return }
+    try { await applyPersonalRestore(prepared); setPrepared(undefined); setMessage('个人数据已恢复；离线知识保持不变。'); await refresh() } catch (reason) { setMessage(reason instanceof Error ? `恢复失败：${reason.message}` : '恢复失败，原数据未改变。') }
   }
   return <section className="atlas-page backup-page"><p className="atlas-coordinate">LOCAL / BACKUP</p><h1 tabIndex={-1}>备份与恢复</h1><p>备份只包含个人状态，不包含可重新下载的正文、媒体、搜索索引、Cache Storage 或离线下载记录。</p>
     <dl className="offline-overview"><div><dt>节点状态</dt><dd>{local.nodeStates.length}</dd></div><div><dt>问题链 / 草稿</dt><dd>{local.questionChains.length} / {local.questionDrafts.length}</dd></div><div><dt>待删除 / 意见</dt><dd>{local.pendingRemovals.length} / {local.opinions.length}</dd></div><div><dt>应用 / 知识版本</dt><dd>{APP_VERSION} / {knowledgeVersion}</dd></div></dl>
     <div className="offline-actions"><button type="button" disabled={exporting} onClick={() => void exportBackup()}>{exporting ? '正在准备备份…' : '导出个人备份'}</button><button type="button" onClick={() => void setBackupReminderEnabled(!(reminder?.enabled ?? true)).then(() => void refresh())}>{reminder?.enabled === false ? '启用备份提醒' : '关闭备份提醒'}</button></div>
     {message && <p role="status">{message}</p>}
-    <p className="offline-note">恢复将在下一阶段启用；导出的文件可保存在“文件”或其他本地位置。</p>
+    <section className="restore-panel"><h2>恢复个人备份</h2><p>恢复会整套替换当前个人状态；离线知识和下载记录不会变化。</p><label>选择 JSON 备份文件<input type="file" accept="application/json,.json" onChange={(event) => void selectRestoreFile(event.currentTarget.files?.[0])} /></label>{prepared && <><p>备份：应用 {prepared.backup.app_version} · 知识 {prepared.backup.knowledge_version}</p><p>将覆盖 {prepared.summary.replaced} 条记录，导入 {prepared.summary.imported} 条记录，跳过 {Object.values(prepared.summary.skipped).reduce((total, count) => total + count, 0)} 条。</p>{Object.entries(prepared.summary.skipped).map(([reason, count]) => <p key={reason}>{reason}：{count}</p>)}{prepared.summary.warnings.map((warning) => <p key={warning}>{warning}</p>)}<button type="button" disabled={!restoreReady && local.nodeStates.length + local.questionChains.length + local.questionDrafts.length + local.pendingRemovals.length + local.opinions.length > 0} onClick={() => void restore()}>{restoreReady || local.nodeStates.length + local.questionChains.length + local.questionDrafts.length + local.pendingRemovals.length + local.opinions.length === 0 ? '确认整套替换恢复' : '请先导出当前备份'}</button></>}</section>
   </section>
 }

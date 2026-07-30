@@ -43,7 +43,7 @@ describe('PWA shell', () => {
     expect(isSkipWaitingMessage({ type: SERVICE_WORKER_MESSAGES.skipWaiting })).toBe(true)
     expect(isSkipWaitingMessage({ type: 'anything-else' })).toBe(false)
     expect(isSkipWaitingMessage(null)).toBe(false)
-    expect(getAppVersionResponse()).toEqual({ appVersion: '0.1.0' })
+    expect(getAppVersionResponse()).toEqual({ appVersion: '0.2.0' })
   })
 
   it('keeps runtime knowledge data outside the application precache source', async () => {

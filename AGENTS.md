@@ -15,6 +15,9 @@
 - `completed` 与 `unknown` 可以并存；路线进度只计算 `core` 与 `anchor`，不计算 `optional`。
 - `uninterested` 只作为本地待删除语义；QA chain 必须线性，预留 ID 删除或隐藏后也不得复用。
 - `tests/fixtures/` 不得进入正式内容、知识地图或生产构建；Dexie 升级必须保留旧版本声明并通过事务迁移，禁止清库重建。
+- Workbox 应用预缓存与版本化知识缓存必须分离；Cache Storage active pointer 是知识读取的唯一版本来源，active 缺文件不得回退网络。
+- 下载、知识更新与恢复必须先验证完整候选再切换；Service Worker 不自动 skip waiting，iPhone 主屏幕 Web App 不承诺后台下载。
+- 个人备份只包含不可重新下载的个人数据，不得包含正文、媒体、搜索索引、Cache Storage 或离线任务；恢复和清除个人数据不得清理 active 知识缓存。
 
 ## 实施与 Git
 
