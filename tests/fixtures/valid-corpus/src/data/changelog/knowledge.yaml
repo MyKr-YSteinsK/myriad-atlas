@@ -1,0 +1,10 @@
+schema_version: 1
+current_version: 2026.07.30-01
+entries:
+  - version: 2026.07.30-01
+    date: 2026-07-30
+    summary: APP_FIXTURE_ONLY corpus.
+    categories: [fixture]
+    added_nodes: []
+    modified_nodes: []
+    deleted_nodes: []

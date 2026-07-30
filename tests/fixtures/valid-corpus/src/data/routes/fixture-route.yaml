@@ -1,0 +1,22 @@
+id: fixture-route
+code: FX01
+name: Fixture 路线
+summary: APP_FIXTURE_ONLY 路线摘要
+stages:
+  - id: fixture-stage
+    name: Fixture 阶段
+    summary: APP_FIXTURE_ONLY 阶段摘要
+    modules:
+      - id: fixture-module
+        name: Fixture 模块
+        summary: APP_FIXTURE_ONLY 模块摘要
+        units:
+          - node_id: normal-one
+            role: core
+            order: 1
+          - node_id: normal-two
+            role: optional
+            order: 2
+          - node_id: anchor-one
+            role: anchor
+            order: 3

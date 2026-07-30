@@ -16,4 +16,14 @@ describe('Markdown compilation', () => {
     await expect(compileMarkdown('<script>alert(1)</script>')).rejects.toThrow(/Raw HTML/)
     await expect(compileMarkdown('[bad](javascript:alert(1))')).rejects.toThrow(/Unsafe link/)
   })
+
+  it('rejects H1 and unsafe image references without misreading fenced code', async () => {
+    await expect(compileMarkdown('# H1')).rejects.toThrow(/H1/)
+    await expect(compileMarkdown('![](/media/image.png)')).rejects.toThrow(/alt text/)
+    await expect(compileMarkdown('![escape](/media/../secret.png)')).rejects.toThrow(/safe/)
+    await expect(compileMarkdown('![external](https://example.com/image.png)')).rejects.toThrow(/safe/)
+    await expect(compileMarkdown('```html\n<h1>not a heading</h1>\n```')).resolves.toMatchObject({
+      toc: [],
+    })
+  })
 })

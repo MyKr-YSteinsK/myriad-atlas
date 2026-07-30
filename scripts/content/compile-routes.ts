@@ -9,7 +9,7 @@ export interface RuntimeRoute {
   name: string
   summary: string
   core_anchor_count: number
-  stages: Array<{ id: string; name: string; modules: Array<{ id: string; name: string; units: Array<{ node_id: string; role: string; order: number; title: string; summary: string; domain_id: string; course_id: string }> }> }>
+  stages: Array<{ id: string; name: string; summary: string; modules: Array<{ id: string; name: string; summary: string; units: Array<{ node_id: string; role: string; order: number; title: string; summary: string; domain_id: string; course_id: string }> }> }>
 }
 
 export function compileRoutes(routes: SourceRoute[], nodes: RuntimeNode[], contentVersion: string): RuntimeRoute[] {
@@ -27,9 +27,11 @@ export function compileRoutes(routes: SourceRoute[], nodes: RuntimeNode[], conte
       stages: route.stages.map((stage) => ({
         id: stage.id,
         name: stage.name,
+        summary: stage.summary,
         modules: stage.modules.map((module) => ({
           id: module.id,
           name: module.name,
+          summary: module.summary,
           units: [...module.units].sort((left, right) => left.order - right.order).map((unit) => {
             const node = byId.get(unit.node_id)
             if (!node) throw new Error(`Cannot enrich route ${route.id}; node ${unit.node_id} is missing`)

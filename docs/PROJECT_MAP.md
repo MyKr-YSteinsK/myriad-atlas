@@ -13,7 +13,8 @@
 - `src/content/`：正式 Markdown 节点（当前为空）。
 - `src/data/taxonomy/`、`src/data/routes/`、`src/data/changelog/`：taxonomy、路线和版本日志；`public/media/`：内容媒体。
 - `schemas/source/`：前台内容、taxonomy、路线和日志 Schema；`schemas/runtime/`：节点、catalog、taxonomy、路线和 manifest Schema。
-- `scripts/content/validate-source.ts`：联合校验入口；`compile-markdown.ts` 与 `compile-node.ts`：安全 HTML 和单节点 JSON 编译。
+- `scripts/content/validate-source.ts`：接受显式内容工作区的联合校验入口；`compile-markdown.ts` 与 `compile-node.ts`：安全 HTML 和单节点 JSON 编译。
+- `tests/fixtures/valid-corpus/` 与 `tests/fixtures/invalid/`：不进入正式构建的非空语料和高风险契约矩阵。
 
 ## 生成数据流
 

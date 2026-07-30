@@ -15,19 +15,21 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "name", "modules"],
+        "required": ["id", "name", "summary", "modules"],
         "properties": {
           "id": { "$ref": "#/$defs/id" },
           "name": { "$ref": "#/$defs/text" },
+          "summary": { "$ref": "#/$defs/text" },
           "modules": {
             "type": "array",
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["id", "name", "units"],
+              "required": ["id", "name", "summary", "units"],
               "properties": {
                 "id": { "$ref": "#/$defs/id" },
                 "name": { "$ref": "#/$defs/text" },
+                "summary": { "$ref": "#/$defs/text" },
                 "units": {
                   "type": "array",
                   "items": {

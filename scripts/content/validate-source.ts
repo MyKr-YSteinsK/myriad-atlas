@@ -3,7 +3,7 @@ import { basename, relative, resolve } from 'node:path'
 import Ajv2020 from 'ajv/dist/2020.js'
 import type { ValidateFunction } from 'ajv'
 import { parseDocument } from 'yaml'
-import { contentRoot, dataRoot, mediaRoot, repoRoot, routesRoot, schemasRoot, taxonomyPath } from './config'
+import { defaultContentWorkspace, type ContentWorkspace } from './config'
 import { issue, type ContentIssue } from './errors'
 import { parseFrontmatter, FrontmatterParseError } from './parse-frontmatter'
 import { findFiles, relativePosix } from './paths'
@@ -44,7 +44,7 @@ export interface SourceRoute {
   code: string
   name: string
   summary: string
-  stages: Array<{ id: string; name: string; modules: Array<{ id: string; name: string; units: RouteUnit[] }> }>
+  stages: Array<{ id: string; name: string; summary: string; modules: Array<{ id: string; name: string; summary: string; units: RouteUnit[] }> }>
   sourcePath: string
 }
 export interface ValidationResult {
@@ -68,8 +68,8 @@ function addSchemaIssues(
   return false
 }
 
-async function loadJsonSchema(name: string): Promise<object> {
-  return JSON.parse(await readFile(resolve(schemasRoot, 'source', name), 'utf8')) as object
+async function loadJsonSchema(workspace: ContentWorkspace, name: string): Promise<object> {
+  return JSON.parse(await readFile(resolve(workspace.schemasRoot, 'source', name), 'utf8')) as object
 }
 
 function parseYamlText(input: string, sourcePath: string, issues: ContentIssue[]): unknown {
@@ -96,14 +96,16 @@ function addTaxonomyRules(taxonomy: Taxonomy, issues: ContentIssue[], sourcePath
       if (course.name.includes('_')) issues.push(issue('error', 'TAXONOMY_NAME_INVALID', sourcePath, `Course name cannot contain _: ${course.name}`))
     }
   }
-  const hasCourse = (domainId: string, courseId: string, name: string): boolean => taxonomy.domains.some(
-    (domain) => domain.id === domainId && domain.courses.some((course) => course.id === courseId && course.name === name),
-  )
-  if (!hasCourse('knowledge-roaming', 'knowledge-roaming-pool', '知识漫游池')) {
-    issues.push(issue('error', 'TAXONOMY_FROZEN_MISSING', sourcePath, 'Missing frozen knowledge roaming course'))
-  }
-  if (!hasCourse('personal-qa', 'question-answer-library', '问题解答库')) {
-    issues.push(issue('error', 'TAXONOMY_FROZEN_MISSING', sourcePath, 'Missing frozen personal QA course'))
+  const frozen = [
+    { domainId: 'knowledge-roaming', domainName: '知识漫游', courseId: 'knowledge-roaming-pool', courseName: '知识漫游池' },
+    { domainId: 'personal-qa', domainName: '个人问答', courseId: 'question-answer-library', courseName: '问题解答库' },
+  ]
+  for (const entry of frozen) {
+    const domain = taxonomy.domains.find((candidate) => candidate.id === entry.domainId)
+    const course = domain?.courses.find((candidate) => candidate.id === entry.courseId)
+    if (domain?.name !== entry.domainName || course?.name !== entry.courseName) {
+      issues.push(issue('error', 'TAXONOMY_FROZEN_MISMATCH', sourcePath, `Frozen taxonomy must be ${entry.domainName}/${entry.courseName} (${entry.domainId}/${entry.courseId})`))
+    }
   }
 }
 
@@ -118,8 +120,21 @@ function bodyLinesWithoutFences(body: string): string[] {
   })
 }
 
-function addNodePathRules(node: SourceNode, taxonomy: Taxonomy, issues: ContentIssue[]): void {
-  const parts = relative(contentRoot, node.absolutePath).replaceAll('\\', '/').split('/')
+function canonicalPath(value: string): string {
+  return value.normalize('NFC').toLocaleLowerCase('en-US')
+}
+
+export function findPathNormalizationCollisions(paths: string[]): string[][] {
+  const groups = new Map<string, string[]>()
+  for (const path of paths) {
+    const key = canonicalPath(path.replaceAll('\\', '/'))
+    groups.set(key, [...(groups.get(key) ?? []), path])
+  }
+  return [...groups.values()].filter((entries) => entries.length > 1)
+}
+
+function addNodePathRules(node: SourceNode, taxonomy: Taxonomy, workspace: ContentWorkspace, issues: ContentIssue[]): void {
+  const parts = relative(workspace.contentRoot, node.absolutePath).replaceAll('\\', '/').split('/')
   const fileName = parts.at(-1) ?? ''
   const invalidWindows = /[<>:"/\\|?*]/
   if (parts.length !== 3 || parts.some((part) => invalidWindows.test(part) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i.test(part))) {
@@ -135,7 +150,7 @@ function addNodePathRules(node: SourceNode, taxonomy: Taxonomy, issues: ContentI
 
   const special = domain?.id === 'knowledge-roaming' || domain?.id === 'personal-qa'
   const expected = special
-    ? /^(\d{4})-(.+)_([^_]+)_([^_]+)\.md$/
+    ? /^((?:000[1-9]|00[1-9][0-9]|0[1-9][0-9]{2}|[1-9][0-9]{3}))-(.+)_([^_]+)_([^_]+)\.md$/
     : /^(0[1-9]|[1-9][0-9])-(.+)_([^_]+)_([^_]+)\.md$/
   const match = expected.exec(fileName)
   if (!match || match[3] !== domainName || match[4] !== courseName) {
@@ -152,7 +167,7 @@ function addNodePathRules(node: SourceNode, taxonomy: Taxonomy, issues: ContentI
   }
 }
 
-function addNodeBodyRules(node: SourceNode, issues: ContentIssue[]): void {
+function addNodeBodyRules(node: SourceNode, workspace: ContentWorkspace, issues: ContentIssue[]): void {
   const lines = bodyLinesWithoutFences(node.body)
   if (lines.some((line) => /^# (?!#)/.test(line))) {
     issues.push(issue('error', 'MARKDOWN_H1_FORBIDDEN', node.sourcePath, 'Node body must not contain an H1', node.data.id))
@@ -164,21 +179,21 @@ function addNodeBodyRules(node: SourceNode, issues: ContentIssue[]): void {
   for (const image of images) {
     const alt = image[1].trim()
     const url = image[2]
-    const mediaPath = resolve(mediaRoot, url.replace(/^\/media\//, ''))
-    if (!alt || !url.startsWith('/media/') || relative(mediaRoot, mediaPath).startsWith('..')) {
+    const mediaPath = resolve(workspace.mediaRoot, url.replace(/^\/media\//, ''))
+    if (!alt || !url.startsWith('/media/') || relative(workspace.mediaRoot, mediaPath).startsWith('..')) {
       issues.push(issue('error', 'MEDIA_REFERENCE_INVALID', node.sourcePath, 'Images need alt text and an in-repository /media/ path', node.data.id))
     }
   }
 }
 
-async function addMissingMediaIssues(nodes: SourceNode[], issues: ContentIssue[]): Promise<void> {
+async function addMissingMediaIssues(nodes: SourceNode[], workspace: ContentWorkspace, issues: ContentIssue[]): Promise<void> {
   const { access } = await import('node:fs/promises')
   for (const node of nodes) {
     for (const image of node.body.matchAll(/!\[[^\]]*]\(([^)\s]+)(?:\s+[^)]*)?\)/g)) {
       const url = image[1]
       if (!url.startsWith('/media/')) continue
       try {
-        await access(resolve(mediaRoot, url.slice('/media/'.length)))
+        await access(resolve(workspace.mediaRoot, url.slice('/media/'.length)))
       } catch {
         issues.push(issue('error', 'MEDIA_MISSING', node.sourcePath, `Referenced media is missing: ${url}`, node.data.id))
       }
@@ -208,7 +223,12 @@ function addCrossNodeRules(nodes: SourceNode[], issues: ContentIssue[]): void {
   const children = new Map<string, SourceNode[]>()
   for (const node of qaNodes) {
     const qa = node.data.qa!
-    if (!byId.has(qa.root_node_id)) issues.push(issue('error', 'QA_ROOT_MISSING', node.sourcePath, `QA root is missing: ${qa.root_node_id}`, node.data.id))
+    if (!/^qa-(?:000[1-9]|00[1-9][0-9]|0[1-9][0-9]{2}|[1-9][0-9]{3})$/.test(qa.chain_id)) {
+      issues.push(issue('error', 'QA_CHAIN_ID_INVALID', node.sourcePath, `Invalid QA chain id: ${qa.chain_id}`, node.data.id))
+    }
+    const root = byId.get(qa.root_node_id)
+    if (!root) issues.push(issue('error', 'QA_ROOT_MISSING', node.sourcePath, `QA root is missing: ${qa.root_node_id}`, node.data.id))
+    else if (root.data.qa) issues.push(issue('error', 'QA_ROOT_INVALID', node.sourcePath, 'QA root must be a non-QA source node', node.data.id))
     if (qa.parent_node_id) {
       const parent = byId.get(qa.parent_node_id)
       if (!parent?.data.qa) issues.push(issue('error', 'QA_PARENT_MISSING', node.sourcePath, `QA parent is missing: ${qa.parent_node_id}`, node.data.id))
@@ -220,6 +240,8 @@ function addCrossNodeRules(nodes: SourceNode[], issues: ContentIssue[]): void {
         current.push(node)
         children.set(qa.parent_node_id, current)
       }
+    } else if (node.data.id !== qa.chain_id) {
+      issues.push(issue('error', 'QA_ROOT_SEMANTICS', node.sourcePath, 'The first QA answer node id must equal chain_id', node.data.id))
     }
   }
   for (const [parent, entries] of children) {
@@ -239,28 +261,45 @@ function addCrossNodeRules(nodes: SourceNode[], issues: ContentIssue[]): void {
   }
 }
 
+function addSequenceAndPathRules(nodes: SourceNode[], issues: ContentIssue[]): void {
+  const sequences = new Map<string, SourceNode>()
+  for (const node of nodes) {
+    const key = `${canonicalPath(node.data.domain_id)}/${canonicalPath(node.data.course_id)}/${node.sequence}`
+    const prior = sequences.get(key)
+    if (prior) {
+      issues.push(issue('error', 'SOURCE_SEQUENCE_DUPLICATE', node.sourcePath, `Sequence ${node.sequence} duplicates ${prior.sourcePath}`, node.data.id))
+    } else {
+      sequences.set(key, node)
+    }
+  }
+  for (const collision of findPathNormalizationCollisions(nodes.map((node) => node.sourcePath))) {
+    const node = nodes.find((entry) => entry.sourcePath === collision[1])
+    issues.push(issue('error', 'SOURCE_PATH_NORMALIZATION_COLLISION', collision[1], `Normalized source path collides with ${collision[0]}`, node?.data.id))
+  }
+}
+
 function addRouteRules(routes: SourceRoute[], nodes: SourceNode[], issues: ContentIssue[]): Set<string> {
   const nodeIds = new Set(nodes.map((node) => node.data.id))
   const routeIds = new Set<string>()
   const routeCodes = new Set<string>()
   const anchors = new Set<string>()
   for (const route of routes) {
-    if (routeIds.has(route.id)) issues.push(issue('error', 'ROUTE_ID_DUPLICATE', route.sourcePath, `Duplicate route id: ${route.id}`))
-    if (routeCodes.has(route.code)) issues.push(issue('error', 'ROUTE_CODE_DUPLICATE', route.sourcePath, `Duplicate route code: ${route.code}`))
+    if (routeIds.has(route.id)) issues.push(issue('error', 'ROUTE_ID_DUPLICATE', route.sourcePath, `Duplicate route id: ${route.id}`, route.id))
+    if (routeCodes.has(route.code)) issues.push(issue('error', 'ROUTE_CODE_DUPLICATE', route.sourcePath, `Duplicate route code: ${route.code}`, route.id))
     routeIds.add(route.id)
     routeCodes.add(route.code)
     const stageIds = new Set<string>()
     for (const stage of route.stages) {
-      if (stageIds.has(stage.id)) issues.push(issue('error', 'ROUTE_STAGE_DUPLICATE', route.sourcePath, `Duplicate stage id: ${stage.id}`))
+      if (stageIds.has(stage.id)) issues.push(issue('error', 'ROUTE_STAGE_DUPLICATE', route.sourcePath, `Duplicate stage id: ${stage.id}`, route.id))
       stageIds.add(stage.id)
       const moduleIds = new Set<string>()
       for (const module of stage.modules) {
-        if (moduleIds.has(module.id)) issues.push(issue('error', 'ROUTE_MODULE_DUPLICATE', route.sourcePath, `Duplicate module id: ${module.id}`))
+        if (moduleIds.has(module.id)) issues.push(issue('error', 'ROUTE_MODULE_DUPLICATE', route.sourcePath, `Duplicate module id: ${module.id}`, route.id))
         moduleIds.add(module.id)
         const orders = new Set<number>()
         for (const unit of module.units) {
-          if (!nodeIds.has(unit.node_id)) issues.push(issue('error', 'ROUTE_NODE_MISSING', route.sourcePath, `Route node is missing: ${unit.node_id}`))
-          if (orders.has(unit.order)) issues.push(issue('error', 'ROUTE_ORDER_DUPLICATE', route.sourcePath, `Duplicate unit order: ${unit.order}`))
+          if (!nodeIds.has(unit.node_id)) issues.push(issue('error', 'ROUTE_NODE_MISSING', route.sourcePath, `Route node is missing: ${unit.node_id}`, route.id))
+          if (orders.has(unit.order)) issues.push(issue('error', 'ROUTE_ORDER_DUPLICATE', route.sourcePath, `Duplicate unit order ${unit.order} in route ${route.id}, stage ${stage.id}, module ${module.id}`, route.id))
           orders.add(unit.order)
           if (unit.role === 'anchor') anchors.add(unit.node_id)
         }
@@ -293,15 +332,15 @@ function addWarnings(nodes: SourceNode[], routes: SourceRoute[], issues: Content
   }
 }
 
-export async function validateSource(): Promise<ValidationResult> {
+export async function validateSource(workspace: ContentWorkspace = defaultContentWorkspace): Promise<ValidationResult> {
   const issues: ContentIssue[] = []
   const ajv = new Ajv2020({ allErrors: true, strict: true, validateFormats: false })
   const [nodeSchema, taxonomySchema, routeSchema, appChangelogSchema, knowledgeChangelogSchema] = await Promise.all([
-    loadJsonSchema('node.schema.json'),
-    loadJsonSchema('taxonomy.schema.json'),
-    loadJsonSchema('route.schema.json'),
-    loadJsonSchema('app-changelog.schema.json'),
-    loadJsonSchema('knowledge-changelog.schema.json'),
+    loadJsonSchema(workspace, 'node.schema.json'),
+    loadJsonSchema(workspace, 'taxonomy.schema.json'),
+    loadJsonSchema(workspace, 'route.schema.json'),
+    loadJsonSchema(workspace, 'app-changelog.schema.json'),
+    loadJsonSchema(workspace, 'knowledge-changelog.schema.json'),
   ])
   const nodeValidator = ajv.compile(nodeSchema)
   const taxonomyValidator = ajv.compile(taxonomySchema)
@@ -309,24 +348,24 @@ export async function validateSource(): Promise<ValidationResult> {
   const appChangelogValidator = ajv.compile(appChangelogSchema)
   const knowledgeChangelogValidator = ajv.compile(knowledgeChangelogSchema)
 
-  const taxonomySource = relativePosix(repoRoot, taxonomyPath)
-  const taxonomyInput = parseYamlText(await readFile(taxonomyPath, 'utf8'), taxonomySource, issues)
+  const taxonomySource = relativePosix(workspace.repoRoot, workspace.taxonomyPath)
+  const taxonomyInput = parseYamlText(await readFile(workspace.taxonomyPath, 'utf8'), taxonomySource, issues)
   let taxonomy: Taxonomy | undefined
   if (addSchemaIssues(issues, taxonomyValidator, taxonomySource, taxonomyInput)) {
     taxonomy = taxonomyInput as Taxonomy
     addTaxonomyRules(taxonomy, issues, taxonomySource)
   }
 
-  const appLogPath = resolve(dataRoot, 'changelog/app.yaml')
-  const knowledgeLogPath = resolve(dataRoot, 'changelog/knowledge.yaml')
-  const appLogSource = relativePosix(repoRoot, appLogPath)
-  const knowledgeLogSource = relativePosix(repoRoot, knowledgeLogPath)
+  const appLogPath = resolve(workspace.dataRoot, 'changelog/app.yaml')
+  const knowledgeLogPath = resolve(workspace.dataRoot, 'changelog/knowledge.yaml')
+  const appLogSource = relativePosix(workspace.repoRoot, appLogPath)
+  const knowledgeLogSource = relativePosix(workspace.repoRoot, knowledgeLogPath)
   addSchemaIssues(issues, appChangelogValidator, appLogSource, parseYamlText(await readFile(appLogPath, 'utf8'), appLogSource, issues))
   addSchemaIssues(issues, knowledgeChangelogValidator, knowledgeLogSource, parseYamlText(await readFile(knowledgeLogPath, 'utf8'), knowledgeLogSource, issues))
 
   const nodes: SourceNode[] = []
-  for (const absolutePath of await findFiles(contentRoot, '.md')) {
-    const sourcePath = relativePosix(repoRoot, absolutePath)
+  for (const absolutePath of await findFiles(workspace.contentRoot, '.md')) {
+    const sourcePath = relativePosix(workspace.repoRoot, absolutePath)
     try {
       const parsed = parseFrontmatter((await readFile(absolutePath, 'utf8')).replaceAll('\r\n', '\n'))
       const valid = addSchemaIssues(issues, nodeValidator, sourcePath, parsed.data)
@@ -335,19 +374,20 @@ export async function validateSource(): Promise<ValidationResult> {
       const sequence = Number.parseInt(basename(absolutePath), 10)
       const node = { sourcePath, absolutePath, body: parsed.body, data, sequence }
       nodes.push(node)
-      if (taxonomy) addNodePathRules(node, taxonomy, issues)
-      addNodeBodyRules(node, issues)
+      if (taxonomy) addNodePathRules(node, taxonomy, workspace, issues)
+      addNodeBodyRules(node, workspace, issues)
     } catch (error) {
       const message = error instanceof FrontmatterParseError || error instanceof Error ? error.message : 'Unknown frontmatter error'
       issues.push(issue('error', 'FRONTMATTER_PARSE', sourcePath, message))
     }
   }
-  await addMissingMediaIssues(nodes, issues)
+  addSequenceAndPathRules(nodes, issues)
+  await addMissingMediaIssues(nodes, workspace, issues)
   addCrossNodeRules(nodes, issues)
 
   const routes: SourceRoute[] = []
-  for (const absolutePath of await findFiles(routesRoot, '.yaml')) {
-    const sourcePath = relativePosix(repoRoot, absolutePath)
+  for (const absolutePath of await findFiles(workspace.routesRoot, '.yaml')) {
+    const sourcePath = relativePosix(workspace.repoRoot, absolutePath)
     const routeInput = parseYamlText(await readFile(absolutePath, 'utf8'), sourcePath, issues)
     if (!addSchemaIssues(issues, routeValidator, sourcePath, routeInput)) continue
     routes.push({ ...(routeInput as Omit<SourceRoute, 'sourcePath'>), sourcePath })
@@ -369,7 +409,7 @@ function printResult(result: ValidationResult): void {
   if (errors.length > 0) process.exitCode = 1
 }
 
-if (import.meta.url === `file:///${process.argv[1].replaceAll('\\', '/')}`) {
+if (process.argv[1] && import.meta.url === `file:///${process.argv[1].replaceAll('\\', '/')}`) {
   validateSource().then(printResult).catch((error: unknown) => {
     console.error(error)
     process.exitCode = 1

@@ -1,0 +1,17 @@
+schema_version: 1
+domains:
+  - id: foundations
+    name: 基础领域
+    courses:
+      - id: core-course
+        name: 核心课程
+  - id: knowledge-roaming
+    name: 知识漫游
+    courses:
+      - id: knowledge-roaming-pool
+        name: 知识漫游池
+  - id: personal-qa
+    name: 个人问答
+    courses:
+      - id: question-answer-library
+        name: 问题解答库

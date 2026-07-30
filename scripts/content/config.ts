@@ -11,3 +11,31 @@ export const generatedRoot = resolve(repoRoot, 'public/_generated')
 export const publicRoot = resolve(repoRoot, 'public')
 export const committedGeneratedRoot = resolve(repoRoot, 'generated')
 export const PROJECT_BASE_PATH = '/myriad-atlas/'
+
+export interface ContentWorkspace {
+  repoRoot: string
+  contentRoot: string
+  dataRoot: string
+  routesRoot: string
+  taxonomyPath: string
+  mediaRoot: string
+  schemasRoot: string
+}
+
+export function createContentWorkspace(
+  root = repoRoot,
+  schemaDirectory = resolve(root, 'schemas'),
+): ContentWorkspace {
+  const workspaceDataRoot = resolve(root, 'src/data')
+  return {
+    repoRoot: root,
+    contentRoot: resolve(root, 'src/content'),
+    dataRoot: workspaceDataRoot,
+    routesRoot: resolve(workspaceDataRoot, 'routes'),
+    taxonomyPath: resolve(workspaceDataRoot, 'taxonomy/taxonomy.yaml'),
+    mediaRoot: resolve(root, 'public/media'),
+    schemasRoot: schemaDirectory,
+  }
+}
+
+export const defaultContentWorkspace = createContentWorkspace()

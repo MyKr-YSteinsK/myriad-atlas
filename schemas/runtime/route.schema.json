@@ -10,15 +10,15 @@
     "stages": {
       "type": "array",
       "items": {
-        "type": "object", "additionalProperties": false, "required": ["id", "name", "modules"],
+        "type": "object", "additionalProperties": false, "required": ["id", "name", "summary", "modules"],
         "properties": {
-          "id": { "type": "string" }, "name": { "type": "string" },
+          "id": { "type": "string" }, "name": { "type": "string" }, "summary": { "type": "string" },
           "modules": {
             "type": "array",
             "items": {
-              "type": "object", "additionalProperties": false, "required": ["id", "name", "units"],
+              "type": "object", "additionalProperties": false, "required": ["id", "name", "summary", "units"],
               "properties": {
-                "id": { "type": "string" }, "name": { "type": "string" },
+                "id": { "type": "string" }, "name": { "type": "string" }, "summary": { "type": "string" },
                 "units": {
                   "type": "array",
                   "items": {
