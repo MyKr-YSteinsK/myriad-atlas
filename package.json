@@ -43,7 +43,8 @@
     "workbox-precaching": "^7.4.1",
     "workbox-routing": "^7.4.1",
     "workbox-window": "^7.4.1",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.0",
+    "yauzl": "3.4.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -53,6 +54,7 @@
     "@types/node": "^26.1.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/yauzl": "3.4.0",
     "@vitejs/plugin-react": "^6.0.4",
     "eslint": "^10.8.0",
     "eslint-plugin-react-hooks": "^7.1.1",
