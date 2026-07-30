@@ -5,7 +5,8 @@
 - `src/main.tsx`：React 启动入口；`src/app/router.tsx`：HashRouter。
 - `src/app/App.tsx` 与 `src/app/pages/`：空库、节点加载、错误边界和路由页面。
 - `src/lib/base-path.ts`：项目子路径与 Hash URL 的唯一解析入口；`src/lib/content-client.ts`：运行时 catalog 与节点 JSON 客户端。
-- `src/app/reader/`：沉浸阅读器、设置面板及仅开发环境的长文样本；`src/app/state/reader-db.ts`：Dexie `myriad-atlas` 数据库、阅读设置和位置。
+- `src/app/reader/`：沉浸阅读器、设置面板及仅开发环境的长文样本；`src/app/state/reader-db.ts`：保留 v1 迁移链的 Dexie v2 数据库与表定义。
+- `src/app/state/local-state.ts`：节点状态、路线位置、问题草稿、待删除和意见的唯一写入服务与同标签页 revision 订阅。
 - `src/app/styles/global.css`：主题 token、safe area、减少动态效果与阅读排版。
 
 ## 内容源与契约

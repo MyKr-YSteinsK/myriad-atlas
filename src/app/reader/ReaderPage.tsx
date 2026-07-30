@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import type { RuntimeCatalog, RuntimeNode } from '../../content/types'
-import { defaultReaderPreferences, loadReaderPreferences, readerDb, saveReaderPreferences, saveReadingProgress, type ReaderPreferences } from '../state/reader-db'
+import { defaultReaderPreferences, loadReaderPreferences, saveReaderPreferences, type ReaderPreferences } from '../state/reader-db'
+import { localState } from '../state/local-state'
 import { ReaderSettings } from './ReaderSettings'
 
 interface ReaderPageProps { node: RuntimeNode; catalog?: RuntimeCatalog }
@@ -31,6 +32,7 @@ export function ReaderPage({ node, catalog }: ReaderPageProps) {
   const heading = useRef<HTMLHeadingElement>(null)
   const persistenceTimer = useRef<number | undefined>(undefined)
   const progressTimer = useRef<number | undefined>(undefined)
+  const latestProgress = useRef({ ratio: 0, anchor: '' })
   const lastScrollY = useRef(0)
   const preferencesChanged = useRef(false)
 
@@ -73,7 +75,17 @@ export function ReaderPage({ node, catalog }: ReaderPageProps) {
   useEffect(() => {
     let active = true
     const tocIds = node.toc.map((entry) => entry.id)
-    readerDb.nodeStates.get(node.id).then((state) => {
+    const flush = (): void => {
+      if (progressTimer.current) {
+        window.clearTimeout(progressTimer.current)
+        progressTimer.current = undefined
+      }
+      const latest = latestProgress.current
+      localState.saveReadingProgress(node.id, latest.ratio, latest.anchor, tocIds).catch(() => {
+        if (active) setStorageWarning(true)
+      })
+    }
+    localState.getNode(node.id).then((state) => {
       if (!active || !state?.reading_progress) return
       const saved = state.reading_progress
       window.requestAnimationFrame(() => {
@@ -86,7 +98,9 @@ export function ReaderPage({ node, catalog }: ReaderPageProps) {
     const onScroll = (): void => {
       const y = window.scrollY
       const nextAnchor = currentAnchor(node.toc)
-      setProgress(scrollRatio())
+      const nextRatio = scrollRatio()
+      latestProgress.current = { ratio: nextRatio, anchor: nextAnchor }
+      setProgress(nextRatio)
       setAnchor(nextAnchor)
       if (y < 80 || y < lastScrollY.current - 24) setTopBarVisible(true)
       else if (y > lastScrollY.current + 24) setTopBarVisible(false)
@@ -94,15 +108,22 @@ export function ReaderPage({ node, catalog }: ReaderPageProps) {
       if (progressTimer.current) return
       progressTimer.current = window.setTimeout(() => {
         progressTimer.current = undefined
-        saveReadingProgress(node.id, scrollRatio(), currentAnchor(node.toc), tocIds).catch(() => setStorageWarning(true))
+        flush()
       }, 800)
     }
+    const onVisibilityChange = (): void => {
+      if (document.visibilityState === 'hidden') flush()
+    }
     window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', onVisibilityChange)
     onScroll()
     return () => {
       active = false
       window.removeEventListener('scroll', onScroll)
-      if (progressTimer.current) window.clearTimeout(progressTimer.current)
+      window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      flush()
     }
   }, [node.id, node.toc])
 
