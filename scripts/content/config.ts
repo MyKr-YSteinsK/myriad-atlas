@@ -7,3 +7,5 @@ export const taxonomyPath = resolve(dataRoot, 'taxonomy/taxonomy.yaml')
 export const routesRoot = resolve(dataRoot, 'routes')
 export const mediaRoot = resolve(repoRoot, 'public/media')
 export const schemasRoot = resolve(repoRoot, 'schemas')
+export const generatedRoot = resolve(repoRoot, 'public/_generated')
+export const PROJECT_BASE_PATH = '/myriad-atlas/'

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://myriad-atlas.dev/schemas/runtime/node.schema.json",
+  "title": "Compiled knowledge node",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "content_version", "id", "title", "domain_id", "domain_name", "course_id", "course_name", "summary", "takeaways", "tags", "prerequisites", "related", "self_check", "body_html", "toc", "plain_text", "media", "source_path", "sequence"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "content_version": { "type": "string", "minLength": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "title": { "type": "string", "minLength": 1 },
+    "domain_id": { "type": "string" },
+    "domain_name": { "type": "string" },
+    "course_id": { "type": "string" },
+    "course_name": { "type": "string" },
+    "summary": { "type": "string" },
+    "takeaways": { "type": "array", "items": { "type": "string" } },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "prerequisites": { "type": "array", "items": { "type": "string" } },
+    "related": { "type": "array", "items": { "type": "string" } },
+    "self_check": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["question", "answer_html"], "properties": { "question": { "type": "string" }, "answer_html": { "type": "string" } } } },
+    "body_html": { "type": "string" },
+    "toc": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["id", "depth", "text"], "properties": { "id": { "type": "string" }, "depth": { "type": "integer", "minimum": 2, "maximum": 6 }, "text": { "type": "string" } } } },
+    "plain_text": { "type": "string" },
+    "media": { "type": "array", "items": { "type": "string" } },
+    "source_path": { "type": "string", "pattern": "^src/content/" },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "qa": { "type": "object", "additionalProperties": false, "required": ["chain_id", "root_node_id", "parent_node_id", "source_content_version", "prompt"], "properties": { "chain_id": { "type": "string" }, "root_node_id": { "type": "string" }, "parent_node_id": { "type": ["string", "null"] }, "source_content_version": { "type": "string" }, "prompt": { "type": "string" } } }
+  }
+}
