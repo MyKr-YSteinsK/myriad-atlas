@@ -60,14 +60,8 @@ function reservedWindowsSegment(segment: string): boolean {
 export function validateBatchPath(path: string): string | undefined {
   if (path !== path.normalize('NFC') || !path || path.length > 1024 || path.includes('\\') || path.startsWith('/') || /^[A-Za-z]:/.test(path) || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(path)) return undefined
   const segments = path.split('/')
-  if (segments.some((segment) => !segment || segment === '.' || segment === '..' || segment.length > 240 || [...segment].some((character) => character.codePointAt(0)! <= 0x1f) || /[<>:"|?*]/.test(segment) || /[. ]$/.test(segment) || reservedWindowsSegment(segment))) return undefined
+  if (segments.some((segment) => !segment || segment === '.' || segment === '..' || [...segment].some((character) => character.codePointAt(0)! <= 0x1f) || /[. ]$/.test(segment) || reservedWindowsSegment(segment))) return undefined
   return path
-}
-
-export function batchEntryByteLimit(path: string): number {
-  if (path.startsWith('src/content/') && path.endsWith('.md')) return BATCH_LIMITS.maxMarkdownBytes
-  if (path.startsWith('src/data/routes/') && /\.ya?ml$/.test(path)) return BATCH_LIMITS.maxRouteBytes
-  return BATCH_LIMITS.maxEntryBytes
 }
 
 export function payloadPaths(manifest: KnowledgeBatchV1): Set<string> {

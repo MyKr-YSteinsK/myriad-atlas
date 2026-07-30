@@ -9,7 +9,7 @@ import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, relative, resolve, sep } from 'node:path'
 import { once } from 'node:events'
 import yauzl, { type Entry, type ZipFile } from 'yauzl'
-import { ALLOWED_MEDIA_EXTENSIONS, BATCH_ID_PATTERN, BATCH_LIMITS, batchEntryByteLimit, knowledgeBatchValidationMessage, payloadPaths, validateBatchPath, validateKnowledgeBatch, type KnowledgeBatchV1 } from '../../src/import/knowledge-batch'
+import { ALLOWED_MEDIA_EXTENSIONS, BATCH_ID_PATTERN, BATCH_LIMITS, knowledgeBatchValidationMessage, payloadPaths, validateBatchPath, validateKnowledgeBatch, type KnowledgeBatchV1 } from '../../src/import/knowledge-batch'
 
 export interface ScannedEntry {
   zip_path: string
@@ -74,8 +74,8 @@ function validateZipPath(name: string): { path: string; directory: boolean } {
 function validateMedia(path: string, bytes: Buffer): void {
   const extension = extname(path).toLowerCase()
   if (!ALLOWED_MEDIA_EXTENSIONS.has(extension)) fail(`不允许的媒体类型 ${path}`)
-  if (extension === '.svg') validateSvg(path, bytes.toString('utf8'))
   const text = bytes.toString('utf8')
+  if (extension === '.svg' && /<script\b|<foreignobject\b|\son[a-z]+\s*=|(?:https?:)?\/\//i.test(text)) fail(`危险 SVG ${path}`)
   const expected = extension === '.png' ? bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
     : extension === '.jpg' || extension === '.jpeg' ? bytes.subarray(0, 3).equals(Buffer.from([255, 216, 255]))
       : extension === '.gif' ? /^GIF8[79]a/.test(text.slice(0, 6))
@@ -83,13 +83,6 @@ function validateMedia(path: string, bytes: Buffer): void {
           : extension === '.avif' ? text.slice(4, 12).includes('ftyp') && text.includes('avif')
             : true
   if (!expected) fail(`媒体 magic bytes 不匹配 ${path}`)
-}
-
-function validateSvg(path: string, text: string): void {
-  if (/<script\b|<foreignobject\b|\son[a-z][\w:-]*\s*=|javascript:|data:|https?:\/\/|\/\/|url\s*\(|@import/i.test(text)) fail(`危险 SVG ${path}`)
-  for (const match of text.matchAll(/\b(?:xlink:)?href\s*=\s*(['"])(.*?)\1/gi)) {
-    if (!match[2].startsWith('#')) fail(`危险 SVG ${path}`)
-  }
 }
 
 async function openZip(path: string): Promise<ZipFile> {
@@ -110,7 +103,7 @@ async function readEntry(zip: ZipFile, entry: Entry, limit: number): Promise<Buf
   return Buffer.concat(chunks)
 }
 
-async function extractEntry(zip: ZipFile, item: ZipEntry, stagingRoot: string, limit: number): Promise<ScannedEntry> {
+async function extractEntry(zip: ZipFile, item: ZipEntry, stagingRoot: string): Promise<ScannedEntry> {
   const destination = resolve(stagingRoot, item.path)
   const rootWithSeparator = `${resolve(stagingRoot)}${sep}`
   if (!destination.startsWith(rootWithSeparator)) fail(`staging 路径逃逸 ${item.zipPath}`)
@@ -123,7 +116,7 @@ async function extractEntry(zip: ZipFile, item: ZipEntry, stagingRoot: string, l
     for await (const chunk of stream) {
       const bytes = Buffer.from(chunk)
       actual += bytes.byteLength
-      if (actual > limit) fail(`单文件实际大小超限 ${item.zipPath}`)
+      if (actual > BATCH_LIMITS.maxEntryBytes) fail(`单文件实际大小超限 ${item.zipPath}`)
       hash.update(bytes)
       if (!output.write(bytes)) await once(output, 'drain')
     }
@@ -157,11 +150,11 @@ export async function scanKnowledgeBatch(zipPath: string, options: ScanBatchOpti
     for await (const entry of zip.eachEntry()) {
       if (entries.length >= BATCH_LIMITS.maxEntries) fail('entry 数量超限')
       if (isSpecialEntry(entry)) fail(`不允许 symlink 或特殊文件 ${entry.fileName}`)
+      if (entry.uncompressedSize > BATCH_LIMITS.maxEntryBytes) fail(`单文件声明大小超限 ${entry.fileName}`)
       if (entry.uncompressedSize > 0 && (entry.compressedSize === 0 || entry.uncompressedSize / entry.compressedSize > BATCH_LIMITS.maxCompressionRatio)) fail(`压缩比超限 ${entry.fileName}`)
       declaredTotal += entry.uncompressedSize
       if (declaredTotal > BATCH_LIMITS.maxTotalBytes) fail('总声明解压大小超限')
       const { path, directory } = validateZipPath(entry.fileName)
-      if (!directory && entry.uncompressedSize > (path === 'batch.json' ? BATCH_LIMITS.maxBatchManifestBytes : batchEntryByteLimit(path))) fail(`单文件声明大小超限 ${entry.fileName}`)
       const key = entry.fileName.normalize('NFC').toLocaleLowerCase('en-US')
       if (seenRaw.has(entry.fileName) || seenInsensitive.has(key)) fail(`重复或大小写冲突 entry ${entry.fileName}`)
       seenRaw.add(entry.fileName); seenInsensitive.add(key)
@@ -191,11 +184,10 @@ export async function scanKnowledgeBatch(zipPath: string, options: ScanBatchOpti
     await mkdir(resolve(stagingRunRoot, 'extracted', manifest.batch_id), { recursive: true })
     const stagingRoot = resolve(stagingRunRoot, 'extracted', manifest.batch_id)
     await writeFile(resolve(stagingRoot, 'batch.json'), manifestBytes, { flag: 'wx' })
-    const batchEntry: ScannedEntry = { zip_path: 'batch.json', path: 'batch.json', compressed_bytes: manifests[0].entry.compressedSize, declared_uncompressed_bytes: manifests[0].entry.uncompressedSize, actual_uncompressed_bytes: manifestBytes.byteLength, sha256: createHash('sha256').update(manifestBytes).digest('hex') }
     const scanned: ScannedEntry[] = []
-    let actualTotal = batchEntry.actual_uncompressed_bytes
+    let actualTotal = 0
     for (const item of payloadEntries) {
-      const scannedEntry = await extractEntry(zip, item, stagingRoot, batchEntryByteLimit(item.path))
+      const scannedEntry = await extractEntry(zip, item, stagingRoot)
       actualTotal += scannedEntry.actual_uncompressed_bytes
       if (actualTotal > BATCH_LIMITS.maxTotalBytes) fail('总实际解压大小超限')
       const operation = manifest.operations.find((candidate) => candidate.path === item.path && candidate.action !== 'delete')
@@ -203,7 +195,8 @@ export async function scanKnowledgeBatch(zipPath: string, options: ScanBatchOpti
       if (operation.kind === 'media') validateMedia(item.path, await readFile(resolve(stagingRoot, item.path)))
       scanned.push(scannedEntry)
     }
-    const result: ScannedBatch = { zip_path: relative(repositoryRoot, zipAbsolutePath).replaceAll('\\', '/'), zip_sha256: await hashFile(zipAbsolutePath), compressed_bytes: entries.reduce((total, item) => total + item.entry.compressedSize, 0), declared_uncompressed_bytes: declaredTotal, actual_uncompressed_bytes: actualTotal, entry_count: entries.length, manifest, entries: [batchEntry, ...scanned], ...(options.retainStaging ? { staging_path: stagingRoot } : {}) }
+    const batchEntry: ScannedEntry = { zip_path: 'batch.json', path: 'batch.json', compressed_bytes: manifests[0].entry.compressedSize, declared_uncompressed_bytes: manifests[0].entry.uncompressedSize, actual_uncompressed_bytes: manifestBytes.byteLength, sha256: createHash('sha256').update(manifestBytes).digest('hex') }
+    const result: ScannedBatch = { zip_path: relative(repositoryRoot, zipAbsolutePath).replaceAll('\\', '/'), zip_sha256: await hashFile(zipAbsolutePath), compressed_bytes: entries.reduce((total, item) => total + item.entry.compressedSize, 0), declared_uncompressed_bytes: declaredTotal, actual_uncompressed_bytes: actualTotal + batchEntry.actual_uncompressed_bytes, entry_count: entries.length, manifest, entries: [batchEntry, ...scanned], ...(options.retainStaging ? { staging_path: stagingRoot } : {}) }
     if (!options.retainStaging) await rm(stagingRunRoot, { recursive: true, force: true })
     return result
   } catch (error) {

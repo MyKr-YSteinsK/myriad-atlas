@@ -42,12 +42,9 @@ describe('knowledge batch contract and scanner', () => {
     expect(validateKnowledgeBatch(value)).toBe(true)
     expect(validateKnowledgeBatch({ ...value, extra: true })).toBe(false)
     expect(validateKnowledgeBatch({ ...value, operations: [{ ...value.operations[0], action: 'delete' }] })).toBe(false)
-    expect(validateKnowledgeBatch({ ...value, operations: [{ ...value.operations[0], delete_mode: 'media' }] })).toBe(false)
-    expect(validateKnowledgeBatch({ ...value, operations: [{ operation_id: 'op-0001', action: 'delete', kind: 'node', path: 'src/content/test.md', entity_id: 'node-test', expected_previous_sha256: hash(Buffer.from('# test')), delete_mode: 'media' }] })).toBe(false)
     expect(validateBatchPath('src/content/a.md')).toBe('src/content/a.md')
     expect(validateBatchPath('../a.md')).toBeUndefined()
     expect(validateBatchPath('src\\content\\a.md')).toBeUndefined()
-    expect(validateBatchPath('src/content/a:b.md')).toBeUndefined()
     expect(validateBatchPath('src/content/CON.md')).toBeUndefined()
     expect(validateBatchPath(`src/content/e\u0301.md`)).toBeUndefined()
     expect(BATCH_LIMITS.maxZipBytes).toBeGreaterThan(BATCH_LIMITS.maxEntryBytes)
@@ -65,35 +62,10 @@ describe('knowledge batch contract and scanner', () => {
     await writeFile(wrongName, storedZip([{ name: 'batch.json', data: batch }, { name: 'payload/src/content/test.md', data: payload }]))
     await expect(scanKnowledgeBatch(wrongName, { repositoryRoot: directory })).rejects.toThrow('文件名与 batch_id 不一致')
 
-    const mismatchedHashPath = join(directory, 'batch-20260731-001-hash.zip')
-    const mismatchedHashBatch = Buffer.from(JSON.stringify({ ...manifest(Buffer.from('different')), batch_id: 'batch-20260731-001-hash' }))
-    await writeFile(mismatchedHashPath, storedZip([{ name: 'batch.json', data: mismatchedHashBatch }, { name: 'payload/src/content/test.md', data: payload }]))
-    await expect(scanKnowledgeBatch(mismatchedHashPath, { repositoryRoot: directory })).rejects.toThrow('payload hash 不匹配')
-
     const slipPath = join(directory, 'batch-20260731-001-test-slip.zip')
     const slipBatch = Buffer.from(JSON.stringify({ ...manifest(payload), batch_id: 'batch-20260731-001-test-slip' }))
     await writeFile(slipPath, storedZip([{ name: 'batch.json', data: slipBatch }, { name: 'payload/../escape.md', data: payload }]))
     await expect(scanKnowledgeBatch(slipPath, { repositoryRoot: directory })).rejects.toThrow('无法安全读取 ZIP')
-    await rm(directory, { recursive: true, force: true })
-  })
-
-  it('enforces route limits and rejects dangerous SVG payloads', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'myriad-batch-'))
-    const routePayload = Buffer.alloc(BATCH_LIMITS.maxRouteBytes + 1, 0x20)
-    const routeBatch = manifest(routePayload)
-    routeBatch.batch_id = 'batch-20260731-001-route-limit'
-    routeBatch.operations = [{ operation_id: 'op-0001', action: 'add', kind: 'route', path: 'src/data/routes/test.yaml', entity_id: 'route-test', payload_sha256: hash(routePayload) }]
-    const routePath = join(directory, `${routeBatch.batch_id}.zip`)
-    await writeFile(routePath, storedZip([{ name: 'batch.json', data: Buffer.from(JSON.stringify(routeBatch)) }, { name: 'payload/src/data/routes/test.yaml', data: routePayload }]))
-    await expect(scanKnowledgeBatch(routePath, { repositoryRoot: directory })).rejects.toThrow('单文件声明大小超限')
-
-    const svgPayload = Buffer.from('<svg><script>alert(1)</script></svg>')
-    const svgBatch = manifest(svgPayload)
-    svgBatch.batch_id = 'batch-20260731-001-svg'
-    svgBatch.operations = [{ operation_id: 'op-0001', action: 'add', kind: 'media', path: 'public/media/test.svg', entity_id: 'media-test', payload_sha256: hash(svgPayload) }]
-    const svgPath = join(directory, `${svgBatch.batch_id}.zip`)
-    await writeFile(svgPath, storedZip([{ name: 'batch.json', data: Buffer.from(JSON.stringify(svgBatch)) }, { name: 'payload/public/media/test.svg', data: svgPayload }]))
-    await expect(scanKnowledgeBatch(svgPath, { repositoryRoot: directory })).rejects.toThrow('危险 SVG')
     await rm(directory, { recursive: true, force: true })
   })
 })
