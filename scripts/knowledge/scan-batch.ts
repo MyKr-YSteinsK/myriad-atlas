@@ -29,6 +29,8 @@ export interface ScannedBatch {
   entry_count: number
   manifest: KnowledgeBatchV1
   entries: ScannedEntry[]
+  /** Present only for callers that explicitly retain the isolated extraction. */
+  staging_path?: string
 }
 
 export interface ScanBatchOptions {
@@ -194,7 +196,7 @@ export async function scanKnowledgeBatch(zipPath: string, options: ScanBatchOpti
       scanned.push(scannedEntry)
     }
     const batchEntry: ScannedEntry = { zip_path: 'batch.json', path: 'batch.json', compressed_bytes: manifests[0].entry.compressedSize, declared_uncompressed_bytes: manifests[0].entry.uncompressedSize, actual_uncompressed_bytes: manifestBytes.byteLength, sha256: createHash('sha256').update(manifestBytes).digest('hex') }
-    const result: ScannedBatch = { zip_path: relative(repositoryRoot, zipAbsolutePath).replaceAll('\\', '/'), zip_sha256: await hashFile(zipAbsolutePath), compressed_bytes: entries.reduce((total, item) => total + item.entry.compressedSize, 0), declared_uncompressed_bytes: declaredTotal, actual_uncompressed_bytes: actualTotal + batchEntry.actual_uncompressed_bytes, entry_count: entries.length, manifest, entries: [batchEntry, ...scanned] }
+    const result: ScannedBatch = { zip_path: relative(repositoryRoot, zipAbsolutePath).replaceAll('\\', '/'), zip_sha256: await hashFile(zipAbsolutePath), compressed_bytes: entries.reduce((total, item) => total + item.entry.compressedSize, 0), declared_uncompressed_bytes: declaredTotal, actual_uncompressed_bytes: actualTotal + batchEntry.actual_uncompressed_bytes, entry_count: entries.length, manifest, entries: [batchEntry, ...scanned], ...(options.retainStaging ? { staging_path: stagingRoot } : {}) }
     if (!options.retainStaging) await rm(stagingRunRoot, { recursive: true, force: true })
     return result
   } catch (error) {

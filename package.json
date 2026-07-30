@@ -20,7 +20,8 @@
     "content:fixture": "tsx scripts/dev/build-fixture-content.ts",
     "dev:fixture": "npm run content:fixture && vite",
     "content:map": "tsx scripts/content/build-knowledge-map.ts",
-    "content:map:check": "tsx scripts/content/build-knowledge-map.ts --check"
+    "content:map:check": "tsx scripts/content/build-knowledge-map.ts --check",
+    "update-knowledge": "tsx scripts/knowledge/update-knowledge.ts"
   },
   "dependencies": {
     "ajv": "^8.20.0",
