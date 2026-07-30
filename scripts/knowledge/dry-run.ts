@@ -13,6 +13,7 @@ import { applyBatchTransaction } from './transaction'
 const execFileAsync = promisify(execFile)
 const SOURCE_TREES = ['src/content', 'src/data/taxonomy', 'src/data/routes', 'src/data/changelog', 'public/media'] as const
 const INDEX_PATH = 'generated/imported-batches.json'
+const TOMBSTONE_PATH = 'generated/content-tombstones.json'
 
 export interface ImportedBatchRecordV1 {
   batch_id: string
@@ -85,8 +86,7 @@ async function filesInTree(root: string, directory: string): Promise<string[]> {
 
 async function sourceFiles(root: string): Promise<string[]> {
   const files = (await Promise.all(SOURCE_TREES.map((directory) => filesInTree(root, directory)))).flat()
-  const index = resolve(root, INDEX_PATH)
-  if ((await lstat(index).catch(() => undefined))?.isFile()) files.push(INDEX_PATH)
+  for (const path of [INDEX_PATH, TOMBSTONE_PATH]) if ((await lstat(resolve(root, path)).catch(() => undefined))?.isFile()) files.push(path)
   return files.sort((a, b) => a.localeCompare(b, 'en'))
 }
 
@@ -246,7 +246,7 @@ export async function dryRunKnowledgeUpdate(options: DryRunOptions = {}): Promis
     try {
       for (const directory of SOURCE_TREES) await copyTree(root, tempRoot, directory)
       await mkdir(resolve(tempRoot, 'generated'), { recursive: true })
-      await copyFile(resolve(root, INDEX_PATH), resolve(tempRoot, INDEX_PATH))
+      for (const path of [INDEX_PATH, TOMBSTONE_PATH]) if (await lstat(resolve(root, path)).catch(() => undefined)) await copyFile(resolve(root, path), resolve(tempRoot, path))
       for (const batch of ordered) { await applyOperations(tempRoot, batch); await addTemporaryChangelog(tempRoot, batch) }
       await updateTemporaryIndex(tempRoot, ordered)
       const validation = await validateSource(createContentWorkspace(tempRoot, resolve(root, 'schemas')))
