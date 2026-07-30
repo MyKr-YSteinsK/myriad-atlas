@@ -63,6 +63,10 @@ export class ContentClient {
   getCachedRecord(nodeId: string): CatalogRecord | undefined {
     return this.catalog?.nodes.find((entry) => entry.id === nodeId)
   }
+
+  getCachedCatalog(): RuntimeCatalog | undefined {
+    return this.catalog
+  }
 }
 
 export const contentClient = new ContentClient()
