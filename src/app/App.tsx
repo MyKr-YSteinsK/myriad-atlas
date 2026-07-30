@@ -1,7 +1,9 @@
 import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import { HomePage } from './pages/HomePage'
+import { LibraryPage, MePage, RoamingPage, RoutesPage } from './pages/MainPages'
 import { NodePage } from './pages/NodePage'
+import { AppLayout } from './layout/AppLayout'
 
 const DevReaderPreview = import.meta.env.DEV ? lazy(() => import('./reader/dev/ReaderPreviewPage')) : undefined
 const titles: Record<string, string> = {
@@ -27,24 +29,26 @@ function NotFoundPage() {
 
 export function App() {
   return <Routes>
-    <Route path="/" element={<HomePage />} />
-    <Route path="/routes" element={<PlaceholderPage title={titles.routes} />} />
-    <Route path="/route/:routeId" element={<PlaceholderPage title="路线详情" />} />
-    <Route path="/library" element={<PlaceholderPage title={titles.library} />} />
-    <Route path="/library/:domainId" element={<PlaceholderPage title="领域" />} />
-    <Route path="/library/:domainId/:courseId" element={<PlaceholderPage title="课程" />} />
-    <Route path="/search" element={<PlaceholderPage title={titles.search} />} />
-    <Route path="/roaming" element={<PlaceholderPage title={titles.roaming} />} />
-    <Route path="/me" element={<PlaceholderPage title={titles.me} />} />
-    <Route path="/me/completed" element={<PlaceholderPage title={titles.completed} />} />
-    <Route path="/me/favorites" element={<PlaceholderPage title={titles.favorites} />} />
-    <Route path="/me/unknown" element={<PlaceholderPage title={titles.unknown} />} />
-    <Route path="/me/questions" element={<PlaceholderPage title={titles.questions} />} />
-    <Route path="/me/questions/:chainId" element={<PlaceholderPage title="问题链详情" />} />
-    <Route path="/me/pending-removals" element={<PlaceholderPage title={titles['pending-removals']} />} />
-    <Route path="/me/opinions" element={<PlaceholderPage title={titles.opinions} />} />
+    <Route element={<AppLayout />}>
+      <Route path="/" element={<HomePage />} />
+      <Route path="/routes" element={<RoutesPage />} />
+      <Route path="/route/:routeId" element={<PlaceholderPage title="路线详情" />} />
+      <Route path="/library" element={<LibraryPage />} />
+      <Route path="/library/:domainId" element={<PlaceholderPage title="领域" />} />
+      <Route path="/library/:domainId/:courseId" element={<PlaceholderPage title="课程" />} />
+      <Route path="/search" element={<PlaceholderPage title={titles.search} />} />
+      <Route path="/roaming" element={<RoamingPage />} />
+      <Route path="/me" element={<MePage />} />
+      <Route path="/me/completed" element={<PlaceholderPage title={titles.completed} />} />
+      <Route path="/me/favorites" element={<PlaceholderPage title={titles.favorites} />} />
+      <Route path="/me/unknown" element={<PlaceholderPage title={titles.unknown} />} />
+      <Route path="/me/questions" element={<PlaceholderPage title={titles.questions} />} />
+      <Route path="/me/questions/:chainId" element={<PlaceholderPage title="问题链详情" />} />
+      <Route path="/me/pending-removals" element={<PlaceholderPage title={titles['pending-removals']} />} />
+      <Route path="/me/opinions" element={<PlaceholderPage title={titles.opinions} />} />
+      <Route path="*" element={<NotFoundPage />} />
+    </Route>
     <Route path="/node/:nodeId" element={<NodePage />} />
     {DevReaderPreview && <Route path="/__reader-preview" element={<Suspense fallback={null}><DevReaderPreview /></Suspense>} />}
-    <Route path="*" element={<NotFoundPage />} />
   </Routes>
 }
