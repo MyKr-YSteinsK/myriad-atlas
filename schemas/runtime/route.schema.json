@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://myriad-atlas.dev/schemas/runtime/route.schema.json",
+  "title": "Runtime knowledge route",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "content_version", "id", "code", "name", "summary", "stages", "core_anchor_count"],
+  "properties": {
+    "schema_version": { "const": 1 }, "content_version": { "type": "string" }, "id": { "type": "string" }, "code": { "type": "string" }, "name": { "type": "string" }, "summary": { "type": "string" }, "core_anchor_count": { "type": "integer", "minimum": 0 },
+    "stages": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "name", "modules"],
+        "properties": {
+          "id": { "type": "string" }, "name": { "type": "string" },
+          "modules": {
+            "type": "array",
+            "items": {
+              "type": "object", "additionalProperties": false, "required": ["id", "name", "units"],
+              "properties": {
+                "id": { "type": "string" }, "name": { "type": "string" },
+                "units": {
+                  "type": "array",
+                  "items": {
+                    "type": "object", "additionalProperties": false, "required": ["node_id", "role", "order", "title", "summary", "domain_id", "course_id"],
+                    "properties": {
+                      "node_id": { "type": "string" }, "role": { "enum": ["core", "optional", "anchor"] }, "order": { "type": "integer" }, "title": { "type": "string" }, "summary": { "type": "string" }, "domain_id": { "type": "string" }, "course_id": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

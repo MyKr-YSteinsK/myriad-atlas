@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://myriad-atlas.dev/schemas/runtime/content-manifest.schema.json",
+  "title": "Content manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "content_version", "base_path", "files"],
+  "properties": {
+    "schema_version": { "const": 1 }, "content_version": { "type": "string", "minLength": 1 }, "base_path": { "const": "/myriad-atlas/" },
+    "files": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["path", "kind", "bytes", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "kind": { "type": "string", "minLength": 1 }, "bytes": { "type": "integer", "minimum": 0 }, "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" } } } }
+  }
+}

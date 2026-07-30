@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://myriad-atlas.dev/schemas/runtime/taxonomy.schema.json",
+  "title": "Runtime taxonomy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "content_version", "domains"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "content_version": { "type": "string", "minLength": 1 },
+    "domains": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "courses"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "courses": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "name", "node_count", "node_ids"],
+              "properties": {
+                "id": { "type": "string" }, "name": { "type": "string" },
+                "node_count": { "type": "integer", "minimum": 0 },
+                "node_ids": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

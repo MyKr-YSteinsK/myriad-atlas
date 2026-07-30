@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://myriad-atlas.dev/schemas/runtime/catalog.schema.json",
+  "title": "Runtime knowledge catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "content_version", "nodes"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "content_version": { "type": "string", "minLength": 1 },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "domain_id", "domain_name", "course_id", "course_name", "summary", "takeaways", "tags", "sequence", "source_path", "kind", "node_path", "route_url"],
+        "properties": {
+          "id": { "type": "string" }, "title": { "type": "string" }, "domain_id": { "type": "string" }, "domain_name": { "type": "string" }, "course_id": { "type": "string" }, "course_name": { "type": "string" }, "summary": { "type": "string" },
+          "takeaways": { "type": "array", "items": { "type": "string" } }, "tags": { "type": "array", "items": { "type": "string" } }, "sequence": { "type": "integer", "minimum": 1 }, "source_path": { "type": "string" },
+          "kind": { "enum": ["normal", "roaming", "qa", "anchor"] }, "node_path": { "type": "string", "pattern": "^_generated/nodes/" }, "route_url": { "type": "string", "pattern": "^#/node/" }
+        }
+      }
+    }
+  }
+}

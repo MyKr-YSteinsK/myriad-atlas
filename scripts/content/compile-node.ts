@@ -31,7 +31,7 @@ export interface RuntimeNode {
   qa?: SourceNode['data']['qa']
 }
 
-async function contentVersion(): Promise<string> {
+export async function contentVersion(): Promise<string> {
   const log = parse(await readFile(resolve(repoRoot, 'src/data/changelog/knowledge.yaml'), 'utf8')) as { current_version?: unknown }
   if (typeof log.current_version !== 'string' || !log.current_version) throw new Error('Knowledge changelog has no current_version')
   return log.current_version
