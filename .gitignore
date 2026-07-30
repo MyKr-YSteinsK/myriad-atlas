@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+public/_generated/
+.tmp/
+tmp/
+inbox/processed/
+inbox/reports/
+*.local
