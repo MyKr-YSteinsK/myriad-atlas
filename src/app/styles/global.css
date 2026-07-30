@@ -60,6 +60,10 @@ button, input, select { font: inherit; }
 .atlas-empty { border-top: 1px solid var(--color-line); display: grid; gap: 1rem; grid-template-columns: 3rem 1fr; margin-top: 3rem; padding-top: 1.25rem; }
 .atlas-empty span { color: var(--color-muted); font-variant-numeric: tabular-nums; }
 .atlas-empty p { margin: 0; }
+.knowledge-map-page label { display: grid; gap: .5rem; max-width: 20rem; }
+.knowledge-map-list { display: grid; gap: .75rem; list-style: none; padding: 0; }
+.knowledge-map-list li { border-top: 1px solid var(--color-line); display: grid; gap: 1rem; grid-template-columns: 3rem 1fr; padding-top: .75rem; }
+.knowledge-map-list p, .knowledge-map-meta { color: var(--color-muted); margin: 0; }
 .home-page > section { border-top: 1px solid var(--color-line); margin-top: 2.5rem; padding-top: 1rem; }
 .section-index { color: var(--color-muted); font-size: .75rem; letter-spacing: .12em; margin-top: 0; text-transform: uppercase; }
 .home-page h2 { font-size: clamp(1.35rem, 5vw, 2.1rem); }

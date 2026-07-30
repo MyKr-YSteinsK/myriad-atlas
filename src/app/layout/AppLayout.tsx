@@ -6,6 +6,7 @@ const navigation = [
   { to: '/routes', label: '路线' },
   { to: '/library', label: '知识库' },
   { to: '/roaming', label: '随机漫游' },
+  { to: '/map', label: '知识地图' },
   { to: '/me', label: '我的' },
 ]
 

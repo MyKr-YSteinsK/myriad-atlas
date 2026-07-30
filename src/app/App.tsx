@@ -11,6 +11,7 @@ import { NodePage } from './pages/NodePage'
 import { AppLayout } from './layout/AppLayout'
 import { AppUpdateNotice } from '../pwa/AppUpdateNotice'
 import { BackupPage, OfflinePage, StoragePage, VersionsPage } from './pages/OfflinePages'
+import { KnowledgeMapPage } from './pages/KnowledgeMapPage'
 
 const DevReaderPreview = import.meta.env.DEV ? lazy(() => import('./reader/dev/ReaderPreviewPage')) : undefined
 function NotFoundPage() {
@@ -28,6 +29,7 @@ export function App() {
       <Route path="/library/:domainId/:courseId" element={<CoursePage />} />
       <Route path="/search" element={<SearchPage />} />
       <Route path="/roaming" element={<RoamingPage />} />
+      <Route path="/map" element={<KnowledgeMapPage />} />
       <Route path="/me" element={<MePage />} />
       <Route path="/me/completed" element={<CompletedPage />} />
       <Route path="/me/favorites" element={<FavoritesPage />} />
