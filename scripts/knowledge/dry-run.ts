@@ -1,13 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { copyFile, lstat, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
-import { dirname, relative, resolve, sep } from 'node:path'
+import { dirname, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { parse, stringify } from 'yaml'
 import { createContentWorkspace } from '../content/config'
 import { renderKnowledgeMap } from '../content/build-knowledge-map'
 import { validateSource } from '../content/validate-source'
 import { scanKnowledgeBatch, type ScannedBatch } from './scan-batch'
+import { applyBatchTransaction } from './transaction'
 
 const execFileAsync = promisify(execFile)
 const SOURCE_TREES = ['src/content', 'src/data/taxonomy', 'src/data/routes', 'src/data/changelog', 'public/media'] as const
@@ -115,24 +116,6 @@ async function copyTree(sourceRoot: string, targetRoot: string, directory: strin
   }
 }
 
-function isTargetPath(path: string): boolean {
-  return path.startsWith('src/content/') || path.startsWith('src/data/routes/') || path.startsWith('public/media/')
-}
-
-function safeWorkspacePath(root: string, path: string): string {
-  if (!isTargetPath(path)) fail(`操作路径不在可更新根目录：${path}`)
-  const absolute = resolve(root, path)
-  if (!absolute.startsWith(`${resolve(root)}${sep}`)) fail(`操作路径逃逸工作区：${path}`)
-  return absolute
-}
-
-async function exists(path: string): Promise<boolean> { return Boolean(await lstat(path).catch(() => undefined)) }
-
-async function checkedHash(path: string, expected: string | undefined, label: string): Promise<void> {
-  if (!expected) fail(`${label} 缺少 expected_previous_sha256`)
-  if (sha256(await readFile(path)) !== expected) fail(`${label} 的前置内容哈希不匹配`)
-}
-
 function operationCounts(batch: ScannedBatch): Record<string, number> {
   const counts: Record<string, number> = {}
   for (const operation of batch.manifest.operations) {
@@ -143,35 +126,7 @@ function operationCounts(batch: ScannedBatch): Record<string, number> {
 }
 
 async function applyOperations(workspaceRoot: string, batch: ScannedBatch): Promise<void> {
-  if (!batch.staging_path) fail(`批次 ${batch.manifest.batch_id} 没有受控暂存内容`)
-  for (const operation of batch.manifest.operations) {
-    const destination = safeWorkspacePath(workspaceRoot, operation.path)
-    const payload = resolve(batch.staging_path, operation.path)
-    if (operation.action === 'add') {
-      if (await exists(destination)) fail(`${operation.operation_id} 不能覆盖现有文件`)
-      if (operation.move_from) {
-        const source = safeWorkspacePath(workspaceRoot, operation.move_from)
-        if (!await exists(source)) fail(`${operation.operation_id} 的 move_from 不存在`)
-        await checkedHash(source, operation.expected_previous_sha256, operation.operation_id)
-        await mkdir(dirname(destination), { recursive: true })
-        await copyFile(source, destination)
-        await rm(source)
-      } else {
-        if (!await exists(payload)) fail(`${operation.operation_id} 的 payload 不存在`)
-        await mkdir(dirname(destination), { recursive: true })
-        await copyFile(payload, destination)
-      }
-      continue
-    }
-    if (!await exists(destination)) fail(`${operation.operation_id} 的目标不存在`)
-    await checkedHash(destination, operation.expected_previous_sha256, operation.operation_id)
-    if (operation.action === 'replace') {
-      if (!await exists(payload)) fail(`${operation.operation_id} 的 payload 不存在`)
-      await copyFile(payload, destination)
-    } else {
-      await rm(destination)
-    }
-  }
+  await applyBatchTransaction(workspaceRoot, batch)
 }
 
 function parseIndex(value: unknown): ImportedBatchIndexV1 {
