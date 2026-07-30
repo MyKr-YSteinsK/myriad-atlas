@@ -1,6 +1,9 @@
 schema_version: 1
-current_version: 0.2.0
+current_version: 0.3.0
 entries:
+  - version: 0.3.0
+    date: 2026-07-31
+    summary: Fixture app version for runtime build compatibility.
   - version: 0.2.0
     date: 2026-07-30
     summary: 增加可安装 PWA、完整离线知识、原子更新、个人备份与恢复。

@@ -21,10 +21,19 @@ npm run verify
 
 在 iPhone Safari 打开站点后，通过“分享 → 添加到主屏幕”安装。请从主屏幕 Web App 中主动开始“完整下载知识库”；应用关闭后不会承诺后台下载。个人备份仅包含阅读与个人状态，不包含可重新下载的正文、媒体或离线缓存。
 
+知识批次默认只做 dry-run；将 ZIP 放入 `inbox/batches` 后运行：
+
+```powershell
+npm run update-knowledge
+npm run update-knowledge -- --apply --confirm "<token>"
+npm run release:prepare
+npm run release:check
+```
+
+apply 不会自动 commit 或 push；processed ZIP 与报告只保留在本地。由用户确认后再执行 `git push origin main`，不要 force push。
+
 内容源码、运行时生成边界和关键入口请见 [项目地图](docs/PROJECT_MAP.md)。
 
 ## 当前范围
 
-已实现：严格内容契约与整体原子构建、正文 Pagefind 全文搜索、QA 索引、五项知识航图导航、路线进度、沉浸阅读、可安装 PWA、版本化完整离线知识下载与原子更新、完整性修复、Dexie v3、个人备份导出与整套替换恢复，以及 GitHub Pages 验证和部署工作流。
-
-尚未实现：ZIP 知识批次导入、正式内容发布流程及云同步。
+已实现：安全 ZIP 批次 dry-run / 显式确认 apply、可回滚文件事务、永久 tombstone、运行时知识地图与移动端结构化地图、离线更新、个人备份恢复及本地发布门禁。

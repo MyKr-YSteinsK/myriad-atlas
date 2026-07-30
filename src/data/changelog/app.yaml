@@ -1,6 +1,9 @@
 schema_version: 1
-current_version: 0.2.0
+current_version: 0.3.0
 entries:
+  - version: 0.3.0
+    date: 2026-07-31
+    summary: 增加安全知识批次导入、物理删除、知识地图和 Windows 发布门禁，并完善 PWA 更新与恢复语义。
   - version: 0.2.0
     date: 2026-07-30
     summary: 增加可安装 PWA、完整离线知识、原子更新、个人备份与恢复。
