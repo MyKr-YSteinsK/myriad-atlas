@@ -76,6 +76,13 @@ export const localState = {
     await readerDb.appMeta.put({ key, value, updated_at: now() })
     changed()
   },
+  markBackupSuccessful: async (timestamp = now()): Promise<void> => {
+    await readerDb.transaction('rw', readerDb.appMeta, async () => {
+      await readerDb.appMeta.put({ key: 'backup.last-success', value: timestamp, updated_at: timestamp })
+      await readerDb.appMeta.put({ key: 'backup.mutation-count', value: 0, updated_at: timestamp })
+    })
+    changed()
+  },
   saveOfflineJob: async (job: OfflineJob): Promise<void> => { await readerDb.offlineJobs.put(job); changed() },
   saveOfflineFile: async (file: OfflineFile): Promise<void> => { await readerDb.offlineFiles.put(file); changed() },
   saveOfflineFiles: async (files: OfflineFile[]): Promise<void> => { await readerDb.offlineFiles.bulkPut(files); changed() },

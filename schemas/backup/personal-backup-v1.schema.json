@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://myriad-atlas.dev/schemas/backup/personal-backup-v1.schema.json",
+  "title": "Myriad Atlas personal backup v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "data_format_version", "exported_at", "app_version", "knowledge_version", "database_version", "data"],
+  "properties": {
+    "format": { "const": "myriad-atlas-personal-backup" },
+    "data_format_version": { "const": 1 },
+    "exported_at": { "$ref": "#/$defs/timestamp" },
+    "app_version": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "knowledge_version": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "database_version": { "const": 3 },
+    "data": {
+      "type": "object", "additionalProperties": false,
+      "required": ["settings", "node_states", "route_positions", "question_chains", "question_drafts", "pending_removals", "opinions", "app_preferences"],
+      "properties": {
+        "settings": { "type": "array", "maxItems": 20, "items": { "$ref": "#/$defs/settings" } },
+        "node_states": { "type": "array", "maxItems": 50000, "items": { "$ref": "#/$defs/nodeState" } },
+        "route_positions": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/$defs/routePosition" } },
+        "question_chains": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/$defs/questionChain" } },
+        "question_drafts": { "type": "array", "maxItems": 20000, "items": { "$ref": "#/$defs/questionDraft" } },
+        "pending_removals": { "type": "array", "maxItems": 20000, "items": { "$ref": "#/$defs/pendingRemoval" } },
+        "opinions": { "type": "array", "maxItems": 20000, "items": { "$ref": "#/$defs/opinion" } },
+        "app_preferences": { "type": "array", "maxItems": 20, "items": { "$ref": "#/$defs/appPreference" } }
+      }
+    }
+  },
+  "$defs": {
+    "timestamp": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?Z$" },
+    "id": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[A-Za-z0-9._:-]+$" },
+    "settings": { "type": "object", "additionalProperties": false, "required": ["key", "value", "updated_at", "schema_version"], "properties": { "key": { "const": "reader.preferences" }, "value": { "$ref": "#/$defs/readerPreferences" }, "updated_at": { "$ref": "#/$defs/timestamp" }, "schema_version": { "const": 1 } } },
+    "readerPreferences": { "type": "object", "additionalProperties": false, "required": ["fontSize", "lineHeight", "paragraphSpacing", "gutter", "contentWidth", "font", "theme", "showProgress", "showToc", "codeWrap"], "properties": { "fontSize": { "type": "number", "minimum": 10, "maximum": 40 }, "lineHeight": { "type": "number", "minimum": 1.1, "maximum": 3 }, "paragraphSpacing": { "type": "number", "minimum": 0, "maximum": 4 }, "gutter": { "type": "number", "minimum": 0, "maximum": 80 }, "contentWidth": { "type": "number", "minimum": 280, "maximum": 1400 }, "font": { "enum": ["system", "serif"] }, "theme": { "enum": ["system", "light", "dark", "warm"] }, "showProgress": { "type": "boolean" }, "showToc": { "type": "boolean" }, "codeWrap": { "type": "boolean" } } },
+    "nodeState": { "type": "object", "additionalProperties": false, "required": ["node_id", "completed", "completed_at", "favorite", "favorite_at", "unknown", "unknown_note", "unknown_updated_at", "uninterested", "uninterested_note", "uninterested_at", "reading_progress", "updated_at"], "properties": { "node_id": { "$ref": "#/$defs/id" }, "completed": { "type": "boolean" }, "completed_at": { "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] }, "favorite": { "type": "boolean" }, "favorite_at": { "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] }, "unknown": { "type": "boolean" }, "unknown_note": { "type": "string", "maxLength": 10000 }, "unknown_updated_at": { "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] }, "uninterested": { "type": "boolean" }, "uninterested_note": { "type": "string", "maxLength": 10000 }, "uninterested_at": { "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] }, "reading_progress": { "anyOf": [{ "$ref": "#/$defs/readingProgress" }, { "type": "null" }] }, "updated_at": { "$ref": "#/$defs/timestamp" } } },
+    "readingProgress": { "type": "object", "additionalProperties": false, "required": ["ratio", "anchor", "updated_at"], "properties": { "ratio": { "type": "number", "minimum": 0, "maximum": 1 }, "anchor": { "type": "string", "maxLength": 256 }, "updated_at": { "$ref": "#/$defs/timestamp" } } },
+    "routePosition": { "type": "object", "additionalProperties": false, "required": ["route_id", "stage_id", "module_id", "node_id", "updated_at"], "properties": { "route_id": { "$ref": "#/$defs/id" }, "stage_id": { "$ref": "#/$defs/id" }, "module_id": { "$ref": "#/$defs/id" }, "node_id": { "$ref": "#/$defs/id" }, "updated_at": { "$ref": "#/$defs/timestamp" } } },
+    "questionChain": { "type": "object", "additionalProperties": false, "required": ["chain_id", "root_node_id", "reserved_first_answer_id", "status", "created_at", "updated_at"], "properties": { "chain_id": { "$ref": "#/$defs/id" }, "root_node_id": { "$ref": "#/$defs/id" }, "reserved_first_answer_id": { "$ref": "#/$defs/id" }, "status": { "enum": ["draft", "awaiting-import", "answered", "id-conflict", "hidden"] }, "created_at": { "$ref": "#/$defs/timestamp" }, "updated_at": { "$ref": "#/$defs/timestamp" } } },
+    "questionDraft": { "type": "object", "additionalProperties": false, "required": ["draft_id", "chain_id", "root_node_id", "parent_node_id", "question", "source_title", "source_domain_id", "source_domain_name", "source_course_id", "source_course_name", "source_path", "source_content_version", "status", "copied_at", "created_at", "updated_at"], "properties": { "draft_id": { "$ref": "#/$defs/id" }, "chain_id": { "$ref": "#/$defs/id" }, "root_node_id": { "$ref": "#/$defs/id" }, "parent_node_id": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] }, "question": { "type": "string", "maxLength": 50000 }, "source_title": { "type": "string", "maxLength": 1000 }, "source_domain_id": { "$ref": "#/$defs/id" }, "source_domain_name": { "type": "string", "maxLength": 1000 }, "source_course_id": { "$ref": "#/$defs/id" }, "source_course_name": { "type": "string", "maxLength": 1000 }, "source_path": { "type": "string", "maxLength": 1000 }, "source_content_version": { "type": "string", "maxLength": 64 }, "status": { "enum": ["editing", "awaiting-import", "resolved", "cancelled"] }, "copied_at": { "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] }, "created_at": { "$ref": "#/$defs/timestamp" }, "updated_at": { "$ref": "#/$defs/timestamp" } } },
+    "pendingRemoval": { "type": "object", "additionalProperties": false, "required": ["id", "kind", "target_id", "root_node_id", "note", "created_at", "updated_at"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "enum": ["roaming-node", "qa-chain", "qa-descendants"] }, "target_id": { "$ref": "#/$defs/id" }, "root_node_id": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] }, "note": { "type": "string", "maxLength": 10000 }, "previous_status": { "enum": ["draft", "awaiting-import", "answered", "id-conflict"] }, "created_at": { "$ref": "#/$defs/timestamp" }, "updated_at": { "$ref": "#/$defs/timestamp" } } },
+    "opinion": { "type": "object", "additionalProperties": false, "required": ["id", "scope", "route_id", "text", "created_at", "updated_at"], "properties": { "id": { "$ref": "#/$defs/id" }, "scope": { "enum": ["global", "route"] }, "route_id": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] }, "text": { "type": "string", "maxLength": 50000 }, "created_at": { "$ref": "#/$defs/timestamp" }, "updated_at": { "$ref": "#/$defs/timestamp" } } },
+    "appPreference": { "type": "object", "additionalProperties": false, "required": ["key", "value", "updated_at"], "properties": { "key": { "enum": ["backup.preferences", "install.guidance"] }, "value": {}, "updated_at": { "$ref": "#/$defs/timestamp" } } }
+  }
+}

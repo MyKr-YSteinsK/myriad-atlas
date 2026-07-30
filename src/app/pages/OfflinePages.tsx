@@ -16,6 +16,7 @@ import { listContentCaches, readActivePointer, type ContentCacheStorage } from '
 import { type ActiveContentPointer } from '../../pwa/cache-protocol'
 import { localState } from '../state/local-state'
 import { useAppUpdate } from '../../pwa/app-update-context'
+import { exportPersonalBackup, getBackupReminderState, setBackupReminderEnabled, type BackupReminderState } from '../backup/personal-backup'
 
 type Runtime = { storage: ContentCacheStorage; download: ContentDownloadManager; checker: KnowledgeUpdateChecker }
 
@@ -56,6 +57,17 @@ export function OfflineHomeHint() {
   if (job?.status === 'failed') return <aside className="home-offline-hint" role="status"><p>知识下载未完成：{job.error_message || '请重试。'}</p><Link to="/me/offline">继续处理</Link></aside>
   if (!local.offlineJobs.some((entry) => entry.status === 'active')) return <aside className="home-offline-hint"><p>尚未完整下载知识库；离线阅读需要由你主动开始。</p><Link to="/me/offline">设置离线知识</Link></aside>
   return null
+}
+
+export function BackupReminder() {
+  const { state } = useAppData()
+  const local = useLocalStateSnapshot()
+  const [reminder, setReminder] = useState<BackupReminderState>()
+  const [later, setLater] = useState(false)
+  const knowledgeVersion = state.status === 'ready' || state.status === 'empty' ? state.data.contentVersion : 'unknown'
+  useEffect(() => { void getBackupReminderState(knowledgeVersion).then(setReminder).catch(() => undefined) }, [knowledgeVersion, local.nodeStates, local.questionChains, local.questionDrafts, local.opinions, local.pendingRemovals])
+  if (!reminder?.due || later) return null
+  return <aside className="home-offline-hint" role="status"><p>个人状态已有 {reminder.mutationCount} 次变更，建议导出一份本地备份。</p><Link to="/me/backups">前往备份</Link><button type="button" onClick={() => setLater(true)}>稍后</button><button type="button" onClick={() => void setBackupReminderEnabled(false).then(() => setReminder({ ...reminder, enabled: false, due: false }))}>关闭提醒</button></aside>
 }
 
 export function OfflinePage() {
@@ -177,6 +189,27 @@ export function StoragePage() {
   </section>
 }
 
-export function BackupPlaceholderPage() {
-  return <section className="atlas-page"><p className="atlas-coordinate">LOCAL / BACKUP</p><h1 tabIndex={-1}>备份与恢复</h1><p>个人数据备份与恢复将在下一阶段启用；离线知识内容不会写入个人备份。</p><Link to="/me">返回我的</Link></section>
+export function BackupPage() {
+  const { state } = useAppData()
+  const local = useLocalStateSnapshot()
+  const [reminder, setReminder] = useState<BackupReminderState>()
+  const [message, setMessage] = useState<string>()
+  const [exporting, setExporting] = useState(false)
+  const knowledgeVersion = state.status === 'ready' || state.status === 'empty' ? state.data.contentVersion : 'unknown'
+  const refresh = useCallback(() => getBackupReminderState(knowledgeVersion).then(setReminder).catch(() => undefined), [knowledgeVersion])
+  useEffect(() => { void refresh() }, [refresh, local.nodeStates, local.questionChains, local.questionDrafts, local.opinions, local.pendingRemovals])
+  const exportBackup = async (): Promise<void> => {
+    setExporting(true); setMessage(undefined)
+    try {
+      const result = await exportPersonalBackup(knowledgeVersion)
+      setMessage(result.method === 'shared' ? '已启动系统分享，备份提醒已重置。' : '已启动 JSON 下载，备份提醒已重置。')
+      await refresh()
+    } catch (reason) { setMessage(reason instanceof Error ? `备份未导出：${reason.message}` : '备份未导出。') } finally { setExporting(false) }
+  }
+  return <section className="atlas-page backup-page"><p className="atlas-coordinate">LOCAL / BACKUP</p><h1 tabIndex={-1}>备份与恢复</h1><p>备份只包含个人状态，不包含可重新下载的正文、媒体、搜索索引、Cache Storage 或离线下载记录。</p>
+    <dl className="offline-overview"><div><dt>节点状态</dt><dd>{local.nodeStates.length}</dd></div><div><dt>问题链 / 草稿</dt><dd>{local.questionChains.length} / {local.questionDrafts.length}</dd></div><div><dt>待删除 / 意见</dt><dd>{local.pendingRemovals.length} / {local.opinions.length}</dd></div><div><dt>应用 / 知识版本</dt><dd>{APP_VERSION} / {knowledgeVersion}</dd></div></dl>
+    <div className="offline-actions"><button type="button" disabled={exporting} onClick={() => void exportBackup()}>{exporting ? '正在准备备份…' : '导出个人备份'}</button><button type="button" onClick={() => void setBackupReminderEnabled(!(reminder?.enabled ?? true)).then(() => void refresh())}>{reminder?.enabled === false ? '启用备份提醒' : '关闭备份提醒'}</button></div>
+    {message && <p role="status">{message}</p>}
+    <p className="offline-note">恢复将在下一阶段启用；导出的文件可保存在“文件”或其他本地位置。</p>
+  </section>
 }
