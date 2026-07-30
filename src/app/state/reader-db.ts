@@ -64,6 +64,7 @@ export interface PendingRemoval {
   target_id: string
   root_node_id: string | null
   note: string
+  previous_status?: Exclude<LocalQuestionChain['status'], 'hidden'>
   created_at: string
   updated_at: string
 }

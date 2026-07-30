@@ -68,4 +68,28 @@ describe('local state repository', () => {
     await expect(localState.saveQuestionDraft({ ...base, draft_id: 'draft-2' })).rejects.toThrow(/pending draft/)
     expect(await readerDb.questionDrafts.count()).toBe(1)
   })
+  it('restores the exact hidden question-chain state and handles legacy pending records conservatively', async () => {
+    const chain = { chain_id: 'qa-0001', root_node_id: 'node', reserved_first_answer_id: 'qa-0001', status: 'awaiting-import' as const, created_at: 'created', updated_at: 'created' }
+    const draft: QuestionDraft = {
+      draft_id: 'qa-0001:initial', chain_id: chain.chain_id, root_node_id: 'node', parent_node_id: null,
+      question: '问题', source_title: '标题', source_domain_id: 'domain', source_domain_name: '领域',
+      source_course_id: 'course', source_course_name: '课程', source_path: 'src/node.md', source_content_version: 'v',
+      status: 'awaiting-import', copied_at: null, created_at: 'created', updated_at: 'created',
+    }
+    await localState.createQuestionChain(chain, draft)
+    await localState.hideQuestionChain(chain.chain_id, chain.root_node_id)
+    await localState.undoHiddenQuestionChain(chain.chain_id)
+    expect(await readerDb.questionChains.get(chain.chain_id)).toMatchObject({ status: 'awaiting-import' })
+
+    await readerDb.questionChains.put({ ...chain, status: 'hidden' })
+    await readerDb.questionDrafts.put({ ...draft, status: 'resolved' })
+    await readerDb.pendingRemovals.put({ id: `qa-chain:${chain.chain_id}`, kind: 'qa-chain', target_id: chain.chain_id, root_node_id: 'node', note: '', created_at: 'created', updated_at: 'created' })
+    await localState.undoHiddenQuestionChain(chain.chain_id)
+    expect(await readerDb.questionChains.get(chain.chain_id)).toMatchObject({ status: 'answered' })
+
+    await readerDb.questionChains.put({ ...chain, status: 'hidden' })
+    await readerDb.questionDrafts.delete(draft.draft_id)
+    await readerDb.pendingRemovals.put({ id: `qa-chain:${chain.chain_id}`, kind: 'qa-chain', target_id: chain.chain_id, root_node_id: 'node', note: '', created_at: 'created', updated_at: 'created' })
+    await expect(localState.undoHiddenQuestionChain(chain.chain_id)).rejects.toThrow(/reliable previous status/)
+  })
 })

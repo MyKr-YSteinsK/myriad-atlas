@@ -2,33 +2,44 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import type { RuntimeRoute } from '../../content/types'
 import { useAppData } from '../data/app-data-context'
+import { loadRouteDetails, type RouteDetailResult } from '../data/route-details'
 import { continueRoute, routeProgress } from '../data/route-progress'
 import { localState } from '../state/local-state'
 import { useLocalStateSnapshot } from '../state/use-local-state'
 
 function useRouteDetails(ids: string[]) {
   const { repository } = useAppData()
-  const [routes, setRoutes] = useState<RuntimeRoute[]>([])
-  const key = ids.join(',')
+  const [results, setResults] = useState<RouteDetailResult[]>([])
+  const [retries, setRetries] = useState<Record<string, number>>({})
+  const key = ids.map((id) => `${id}:${retries[id] ?? 0}`).join(',')
   useEffect(() => {
     const controller = new AbortController()
-    Promise.all(ids.map((id) => repository.loadRoute(id, controller.signal)))
-      .then(setRoutes).catch(() => setRoutes([]))
-    return () => controller.abort()
+    let active = true
+    void loadRouteDetails(ids, repository.loadRoute.bind(repository), controller.signal).then((next) => {
+      if (active) setResults(next)
+    })
+    return () => { active = false; controller.abort() }
   }, [key, repository]) // eslint-disable-line react-hooks/exhaustive-deps
-  return routes
+  return {
+    results,
+    retry: (id: string) => setRetries((current) => ({ ...current, [id]: (current[id] ?? 0) + 1 })),
+  }
 }
 
 export function RoutesPage() {
   const { state } = useAppData()
   const local = useLocalStateSnapshot()
   const routeRecords = state.status === 'ready' || state.status === 'empty' ? state.data.routes.routes : []
-  const routes = useRouteDetails(routeRecords.map((route) => route.id))
+  const { results, retry } = useRouteDetails(routeRecords.map((route) => route.id))
   const completed = useMemo(() => new Set(local.nodeStates.filter((entry) => entry.completed).map((entry) => entry.node_id)), [local.nodeStates])
   return <section className="atlas-page route-list-page"><p className="atlas-coordinate">PATHS / INDEX</p><h1 tabIndex={-1}>路线</h1>
     {state.status === 'loading' && <p role="status">正在加载路线……</p>}
     {routeRecords.length === 0 && state.status !== 'loading' && <div className="atlas-empty"><span>00</span><p>当前没有正式路线。</p></div>}
-    <ol className="route-index">{routes.map((route) => {
+    <ol className="route-index">{routeRecords.map((record) => {
+      const result = results.find((entry) => entry.id === record.id)
+      if (result?.error) return <li key={record.id}><span className="route-code">{record.code}</span><div><h2><Link to={`/route/${record.id}`}>{record.name}</Link></h2><p role="alert">{result.error}</p><button type="button" onClick={() => retry(record.id)}>重试加载路线</button></div></li>
+      if (!result?.route) return <li key={record.id}><span className="route-code">{record.code}</span><div><h2><Link to={`/route/${record.id}`}>{record.name}</Link></h2><p role="status">正在加载路线…</p></div></li>
+      const route = result.route
       const progress = routeProgress(route, completed)
       const position = local.routePositions.find((entry) => entry.route_id === route.id)
       const target = continueRoute(route, completed, position)

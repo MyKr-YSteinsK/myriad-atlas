@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import type { RuntimeCatalog, RuntimeNode, RuntimeRoute } from '../../content/types'
 import { contentRepository } from '../../lib/content-client'
 import { continueRoute } from '../data/route-progress'
-import { createFollowUp, createQuestionChain } from '../data/question-chains'
+import { createFollowUp, createUnknownQuestionChain } from '../data/question-chains'
 import { useOptionalAppData } from '../data/app-data-context'
 import { localState } from '../state/local-state'
 import { useLocalStateSnapshot } from '../state/use-local-state'
@@ -45,8 +45,8 @@ export function NodeActions({ node, catalog }: { node: RuntimeNode; catalog?: Ru
     if (!appData || appData.state.status !== 'ready' && appData.state.status !== 'empty') throw new Error('问题链数据尚未加载')
     const record = appData.state.data.catalog.nodes.find((entry) => entry.id === node.id)
     if (!record) throw new Error('来源节点不在目录中')
-    await localState.setUnknown(node.id, note)
     if (node.qa) {
+      await localState.setUnknown(node.id, note)
       const formal = appData.state.data.qaIndex.chains.find((entry) => entry.chain_id === node.qa!.chain_id)
       if (!formal) throw new Error('正式问题链索引缺失')
       let chain = local.questionChains.find((entry) => entry.chain_id === formal.chain_id)
@@ -62,8 +62,17 @@ export function NodeActions({ node, catalog }: { node: RuntimeNode; catalog?: Ru
       await createFollowUp(chain, record, appData.state.data.qaIndex, note)
       navigate(`/me/questions/${chain.chain_id}`)
     } else {
-      const created = await createQuestionChain(record, appData.state.data.qaIndex, note)
+      const created = await createUnknownQuestionChain(record, appData.state.data.qaIndex, note)
       navigate(`/me/questions/${created.chain.chain_id}`)
+    }
+  }
+  const createQuestionAndClose = async (): Promise<void> => {
+    setError('')
+    try {
+      await createQuestion()
+      setUnknownOpen(false)
+    } catch {
+      setError('状态保存失败，操作未生效。')
     }
   }
 
@@ -88,7 +97,7 @@ export function NodeActions({ node, catalog }: { node: RuntimeNode; catalog?: Ru
         })
       }}>不感兴趣</button>}</div>
     {undoNote !== undefined && <p role="status">已取消不会。<button type="button" onClick={() => { run(() => localState.undoClearUnknown(node.id, undoNote)); setUndoNote(undefined) }}>撤销</button></p>}
-    {unknownOpen && <div className="node-action-dialog" role="dialog" aria-modal="true" aria-labelledby="unknown-title"><h3 id="unknown-title">不会／追问</h3><label>具体问题或备注<textarea value={note} maxLength={5000} onChange={(event) => setNote(event.target.value)} /></label><button type="button" onClick={() => { run(() => localState.setUnknown(node.id, note)); setUnknownOpen(false) }}>只保存不会</button><button type="button" onClick={() => { run(createQuestion); setUnknownOpen(false) }}>{node.qa ? '继续追问' : '新建问题链'}</button><button type="button" onClick={() => setUnknownOpen(false)}>取消</button></div>}
+    {unknownOpen && <div className="node-action-dialog" role="dialog" aria-modal="true" aria-labelledby="unknown-title"><h3 id="unknown-title">不会／追问</h3><label>具体问题或备注<textarea value={note} maxLength={5000} onChange={(event) => setNote(event.target.value)} /></label><button type="button" onClick={() => { run(() => localState.setUnknown(node.id, note)); setUnknownOpen(false) }}>只保存不会</button><button type="button" onClick={() => { void createQuestionAndClose() }}>{node.qa ? '继续追问' : '新建问题链'}</button><button type="button" onClick={() => setUnknownOpen(false)}>取消</button></div>}
     <nav aria-label="下一节点">{source === 'route' && routeTarget && routeTarget.unit.node_id !== node.id && <Link to={`/node/${routeTarget.unit.node_id}?source=route&route=${route!.id}&stage=${routeTarget.stageId}&module=${routeTarget.moduleId}`}>下一节点：{routeTarget.unit.title}</Link>}{source === 'course' && courseNext && <Link to={`/node/${courseNext.id}?source=course&domain=${node.domain_id}&course=${node.course_id}`}>课程下一篇：{courseNext.title}</Link>}{source === 'roaming' && <Link to="/roaming">换一个</Link>}{(source === 'search' || source === 'home' || !source) && <Link to={source === 'search' ? '/search' : '/'}>返回来源</Link>}</nav>
   </section>
 }

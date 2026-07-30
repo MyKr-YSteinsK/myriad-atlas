@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import type { RuntimeCatalog, RuntimeNode } from '../../content/types'
-import { defaultReaderPreferences, loadReaderPreferences, saveReaderPreferences, type ReaderPreferences } from '../state/reader-db'
 import { localState } from '../state/local-state'
 import { ReaderSettings } from './ReaderSettings'
 import { NodeActions } from './NodeActions'
+import { useReaderPreferencePersistence } from './use-reader-preference-persistence'
 
 interface ReaderPageProps { node: RuntimeNode; catalog?: RuntimeCatalog }
 
@@ -23,25 +23,17 @@ function currentAnchor(toc: RuntimeNode['toc']): string {
 }
 
 export function ReaderPage({ node, catalog }: ReaderPageProps) {
-  const [preferences, setPreferences] = useState<ReaderPreferences>(defaultReaderPreferences)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [storageWarning, setStorageWarning] = useState(false)
+  const [progressWarning, setProgressWarning] = useState(false)
   const [progress, setProgress] = useState(0)
   const [anchor, setAnchor] = useState('')
   const [topBarVisible, setTopBarVisible] = useState(true)
   const settingsButton = useRef<HTMLButtonElement>(null)
   const heading = useRef<HTMLHeadingElement>(null)
-  const persistenceTimer = useRef<number | undefined>(undefined)
   const progressTimer = useRef<number | undefined>(undefined)
   const latestProgress = useRef({ ratio: 0, anchor: '' })
   const lastScrollY = useRef(0)
-  const preferencesChanged = useRef(false)
-
-  useEffect(() => {
-    let active = true
-    loadReaderPreferences().then((value) => { if (active && !preferencesChanged.current) setPreferences(value) }).catch(() => { if (active) setStorageWarning(true) })
-    return () => { active = false }
-  }, [])
+  const { preferences, storageWarning, update: updatePreferences, reset: resetPreferences } = useReaderPreferencePersistence()
 
   useEffect(() => {
     document.title = `${node.title}｜万象回廊 · MyKr`
@@ -55,24 +47,6 @@ export function ReaderPage({ node, catalog }: ReaderPageProps) {
     return () => { delete root.dataset.theme }
   }, [preferences.theme])
 
-  const updatePreferences = useCallback((patch: Partial<ReaderPreferences>) => {
-    preferencesChanged.current = true
-    setPreferences((current) => {
-      const next = { ...current, ...patch }
-      if (persistenceTimer.current) window.clearTimeout(persistenceTimer.current)
-      persistenceTimer.current = window.setTimeout(() => {
-        saveReaderPreferences(next).catch(() => setStorageWarning(true))
-      }, 250)
-      return next
-    })
-  }, [])
-
-  const resetPreferences = useCallback(() => {
-    updatePreferences(defaultReaderPreferences)
-  }, [updatePreferences])
-
-  useEffect(() => () => { if (persistenceTimer.current) window.clearTimeout(persistenceTimer.current) }, [])
-
   useEffect(() => {
     let active = true
     const tocIds = node.toc.map((entry) => entry.id)
@@ -83,7 +57,7 @@ export function ReaderPage({ node, catalog }: ReaderPageProps) {
       }
       const latest = latestProgress.current
       localState.saveReadingProgress(node.id, latest.ratio, latest.anchor, tocIds).catch(() => {
-        if (active) setStorageWarning(true)
+        if (active) setProgressWarning(true)
       })
     }
     localState.getNode(node.id).then((state) => {
@@ -94,7 +68,7 @@ export function ReaderPage({ node, catalog }: ReaderPageProps) {
         if (target) target.scrollIntoView({ block: 'start' })
         else window.scrollTo({ top: saved.ratio * Math.max(0, document.documentElement.scrollHeight - window.innerHeight), behavior: 'auto' })
       })
-    }).catch(() => { if (active) setStorageWarning(true) })
+    }).catch(() => { if (active) setProgressWarning(true) })
 
     const onScroll = (): void => {
       const y = window.scrollY
@@ -148,7 +122,7 @@ export function ReaderPage({ node, catalog }: ReaderPageProps) {
     </header>
     <article className="reader-article">
       <header className="reader-title"><h1 ref={heading} tabIndex={-1}>{node.title}</h1><p>{node.summary}</p></header>
-      {storageWarning && <p className="reader-storage-warning" role="status">本设备无法保存阅读设置或进度；阅读仍可正常进行。</p>}
+      {(storageWarning || progressWarning) && <p className="reader-storage-warning" role="status">本设备无法保存阅读设置或进度；阅读仍可正常进行。</p>}
       {preferences.showToc && node.toc.length > 0 && <nav id="reader-toc" className="reader-toc" aria-label="文章目录"><h2>目录</h2><ol>{node.toc.map((entry) => <li key={entry.id} data-active={anchor === entry.id}><button type="button" onClick={() => document.getElementById(entry.id)?.scrollIntoView({ block: 'start' })}>{entry.text}</button></li>)}</ol></nav>}
       <div className="reader-body" dangerouslySetInnerHTML={{ __html: node.body_html }} />
       <section className="reader-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">要点</h2><ul>{node.takeaways.map((takeaway) => <li key={takeaway}>{takeaway}</li>)}</ul></section>

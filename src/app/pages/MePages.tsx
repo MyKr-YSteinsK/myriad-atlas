@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAppData } from '../data/app-data-context'
 import { ReaderSettings } from '../reader/ReaderSettings'
+import { useReaderPreferencePersistence } from '../reader/use-reader-preference-persistence'
 import { localState } from '../state/local-state'
-import { defaultReaderPreferences, loadReaderPreferences, saveReaderPreferences, type Opinion, type ReaderPreferences } from '../state/reader-db'
+import { type Opinion } from '../state/reader-db'
 import { useLocalStateSnapshot } from '../state/use-local-state'
 
 function useCatalog() {
@@ -32,10 +33,9 @@ function StateList({ mode }: { mode: 'completed' | 'favorite' | 'unknown' }) {
 
 export function MePage() {
   const local = useLocalStateSnapshot()
-  const [preferences, setPreferences] = useState<ReaderPreferences>(defaultReaderPreferences)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsButton = useRef<HTMLButtonElement>(null)
-  useEffect(() => { void loadReaderPreferences().then(setPreferences) }, [])
+  const { preferences, storageWarning, update, reset } = useReaderPreferencePersistence()
   const entries = [
     ['/me/completed', '已读 / 已完成', local.nodeStates.filter((entry) => entry.completed).length],
     ['/me/favorites', '收藏', local.nodeStates.filter((entry) => entry.favorite).length],
@@ -45,11 +45,9 @@ export function MePage() {
     ['/me/opinions', '意见', local.opinions.length],
   ] as const
   return <section className="atlas-page me-page"><p className="atlas-coordinate">LOCAL / ME</p><h1 tabIndex={-1}>我的</h1><ol>{entries.map(([to, label, count]) => <li key={to}><Link to={to}>{label}<span>{count}</span></Link></li>)}</ol>
-    <section><h2>阅读设置</h2><p>{preferences.font === 'serif' ? '衬线' : '系统字体'} · {preferences.theme} · {preferences.fontSize}px</p><button ref={settingsButton} type="button" onClick={() => setSettingsOpen(true)}>调整阅读设置</button></section>
+    <section><h2>阅读设置</h2><p>{preferences.font === 'serif' ? '衬线' : '系统字体'} · {preferences.theme} · {preferences.fontSize}px</p>{storageWarning && <p role="status">阅读设置暂未写入本地。</p>}<button ref={settingsButton} type="button" onClick={() => setSettingsOpen(true)}>调整阅读设置</button></section>
     <p className="future-note">完整离线、备份恢复与更新管理将在后续阶段提供。</p>
-    <ReaderSettings open={settingsOpen} preferences={preferences} onChange={(patch) => {
-      const next = { ...preferences, ...patch }; setPreferences(next); void saveReaderPreferences(next)
-    }} onReset={() => { setPreferences(defaultReaderPreferences); void saveReaderPreferences(defaultReaderPreferences) }} onClose={() => setSettingsOpen(false)} triggerRef={settingsButton} />
+    <ReaderSettings open={settingsOpen} preferences={preferences} onChange={update} onReset={reset} onClose={() => setSettingsOpen(false)} triggerRef={settingsButton} />
   </section>
 }
 export function CompletedPage() { return <section className="atlas-page"><h1 tabIndex={-1}>已读 / 已完成</h1><StateList mode="completed" /></section> }

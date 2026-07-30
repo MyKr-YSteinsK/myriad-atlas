@@ -21,6 +21,7 @@ type ImportPagefind = (url: string) => Promise<PagefindApi>
 export class SearchRepository {
   private api?: PagefindApi
   private initialization?: Promise<PagefindApi>
+  private generation = 0
 
   constructor(
     private readonly content: ContentRepository,
@@ -29,15 +30,34 @@ export class SearchRepository {
 
   async init(): Promise<void> {
     if (this.api) return
-    this.initialization ??= this.importer(basePath('_generated/pagefind/pagefind.js')).then(async (api) => {
+    const generation = this.generation
+    const initialization = this.initialization ??= this.importer(basePath('_generated/pagefind/pagefind.js')).then(async (api) => {
       await api.init({ baseUrl: PROJECT_BASE_PATH, bundlePath: basePath('_generated/pagefind/') })
-      this.api = api
       return api
-    }).catch((error: unknown) => {
-      this.initialization = undefined
-      throw new ContentClientError('missing', '全文搜索索引不可用。', { cause: error })
     })
-    await this.initialization
+    try {
+      const api = await initialization
+      if (generation !== this.generation) return this.init()
+      this.api = api
+    } catch (error) {
+      if (generation === this.generation) this.initialization = undefined
+      throw new ContentClientError('missing', '全文搜索索引不可用。', { cause: error })
+    }
+  }
+  dispose(): void {
+    this.generation += 1
+    this.api = undefined
+    this.initialization = undefined
+  }
+  invalidate(): void {
+    this.dispose()
+  }
+  reset(): void {
+    this.dispose()
+  }
+  async reload(): Promise<void> {
+    this.dispose()
+    await this.init()
   }
   async status(signal?: AbortSignal): Promise<SearchStatus | { available: true }> {
     try {
@@ -63,7 +83,7 @@ export class SearchRepository {
       const meta = isStringRecord(data.meta) ? data.meta : {}
       return {
         url: typeof data.url === 'string' ? data.url : '',
-        excerpt: typeof data.raw_content === 'string' ? data.raw_content : typeof data.excerpt === 'string' ? data.excerpt : '',
+        excerpt: toSearchExcerpt(data.excerpt, data.raw_content),
         meta,
       }
     }))
@@ -72,6 +92,19 @@ export class SearchRepository {
     await this.init()
     return this.api!.filters()
   }
+}
+
+const SEARCH_EXCERPT_LIMIT = 280
+
+export function toSearchExcerpt(excerpt: unknown, rawContent?: unknown): string {
+  const source = typeof excerpt === 'string' ? excerpt : typeof rawContent === 'string' ? rawContent : ''
+  const plain = source
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&(nbsp|#160);/gi, ' ')
+    .replace(/&(amp|lt|gt|quot|#39);/gi, (_match, entity: string) => ({ amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" }[entity.toLowerCase()] ?? ' '))
+    .replace(/\s+/g, ' ')
+    .trim()
+  return plain.length > SEARCH_EXCERPT_LIMIT ? `${plain.slice(0, SEARCH_EXCERPT_LIMIT).trimEnd()}…` : plain
 }
 
 function isStringRecord(value: unknown): value is Record<string, string> {

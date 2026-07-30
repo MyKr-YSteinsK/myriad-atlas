@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ContentRepository } from '../../src/lib/content-client'
 import { ContentClientError } from '../../src/lib/errors'
-import { SearchRepository } from '../../src/lib/search-repository'
+import { SearchRepository, toSearchExcerpt } from '../../src/lib/search-repository'
 
 const version = '2026.07.30-01'
 const emptyCatalog = { schema_version: 1, content_version: version, nodes: [] }
@@ -65,6 +65,20 @@ describe('runtime content repositories', () => {
     await new ContentRepository(fetcher).loadCatalog(signal)
     expect(fetcher).toHaveBeenCalledWith('/myriad-atlas/_generated/catalog.json', { signal })
   })
+  it('invalidates completed and in-flight reads before loading a new content version', async () => {
+    let resolveOld: ((response: Response) => void) | undefined
+    const fetcher = vi.fn()
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => { resolveOld = resolve }))
+      .mockResolvedValueOnce(json({ ...emptyCatalog, content_version: '2026.07.31-01' }))
+    const repository = new ContentRepository(fetcher)
+    const stale = repository.loadCatalog()
+    repository.invalidate()
+    const fresh = repository.loadCatalog()
+    resolveOld?.(json(emptyCatalog))
+    await expect(fresh).resolves.toMatchObject({ content_version: '2026.07.31-01' })
+    await expect(stale).resolves.toMatchObject({ content_version: '2026.07.31-01' })
+    expect(fetcher).toHaveBeenCalledTimes(2)
+  })
 })
 
 describe('Pagefind repository', () => {
@@ -73,7 +87,7 @@ describe('Pagefind repository', () => {
       init: vi.fn().mockResolvedValue(undefined),
       preload: vi.fn().mockResolvedValue(undefined),
       search: vi.fn().mockResolvedValue({
-        results: [{ data: async () => ({ url: '/unsafe', raw_content: 'plain excerpt', meta: { node_id: 'normal-one' } }) }],
+        results: [{ data: async () => ({ url: '/unsafe', excerpt: '<mark>命中</mark> <strong>片段</strong>', raw_content: 'x'.repeat(1000), meta: { node_id: 'normal-one' } }) }],
       }),
       filters: vi.fn().mockResolvedValue({ kind: { normal: 1 } }),
     }
@@ -88,9 +102,31 @@ describe('Pagefind repository', () => {
     })
     await expect(search.search('词')).resolves.toEqual([{
       url: '/unsafe',
-      excerpt: 'plain excerpt',
+      excerpt: '命中 片段',
       meta: { node_id: 'normal-one' },
     }])
     await expect(search.filters()).resolves.toEqual({ kind: { normal: 1 } })
+  })
+  it('converts HTML excerpts to bounded plain text without exposing an article body', () => {
+    expect(toSearchExcerpt('<p> 甲 <mark>乙</mark> </p>')).toBe('甲 乙')
+    const value = toSearchExcerpt(undefined, `开头 ${'长正文'.repeat(200)}`)
+    expect(value).toHaveLength(281)
+    expect(value.endsWith('…')).toBe(true)
+  })
+  it('disposes an in-flight Pagefind import before reinitializing', async () => {
+    const first = { init: vi.fn().mockResolvedValue(undefined), preload: vi.fn(), search: vi.fn(), filters: vi.fn() }
+    const second = { init: vi.fn().mockResolvedValue(undefined), preload: vi.fn(), search: vi.fn(), filters: vi.fn() }
+    let resolveFirst: ((api: typeof first) => void) | undefined
+    const importer = vi.fn()
+      .mockImplementationOnce(() => new Promise<typeof first>((resolve) => { resolveFirst = resolve }))
+      .mockResolvedValueOnce(second)
+    const search = new SearchRepository(new ContentRepository(vi.fn()), importer)
+    const stale = search.init()
+    search.invalidate()
+    resolveFirst?.(first)
+    await search.init()
+    await stale
+    expect(importer).toHaveBeenCalledTimes(2)
+    expect(second.init).toHaveBeenCalledOnce()
   })
 })

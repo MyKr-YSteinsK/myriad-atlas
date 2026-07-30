@@ -4,10 +4,10 @@
 
 - `src/main.tsx`：React 启动入口；`src/app/router.tsx`：HashRouter。
 - `src/app/App.tsx`、`layout/` 与 `pages/`：五项导航、首页、路线、知识库、搜索、漫游、“我的”和节点路由。
-- `src/lib/base-path.ts`：项目子路径与 Hash URL 的唯一解析入口；`src/lib/content-client.ts` / `search-repository.ts`：ContentRepository 与 Pagefind SearchRepository。
-- `src/app/reader/`：沉浸阅读器、设置面板及仅开发环境的长文样本；`src/app/state/reader-db.ts`：保留 v1 迁移链的 Dexie v2 数据库与表定义。
+- `src/lib/base-path.ts`：项目子路径与 Hash URL 的唯一解析入口；`src/lib/content-client.ts` / `search-repository.ts`：可失效重载的 ContentRepository 与 Pagefind SearchRepository。
+- `src/app/reader/`：沉浸阅读器、设置面板、阅读设置生命周期 flush 及仅开发环境的长文样本；`src/app/state/reader-db.ts`：保留 v1 迁移链的 Dexie v2 数据库与表定义。
 - `src/app/state/local-state.ts`：节点状态、路线位置、问题草稿、待删除和意见的唯一写入服务与同标签页 revision 订阅。
-- `src/app/data/route-progress.ts`：路线进度与继续算法；`question-chains.ts`：QA ID、线性问题链、绑定和生成请求；`roaming.ts`：漫游池与安全随机。
+- `src/app/data/route-progress.ts`：路线进度与继续算法；`question-chains.ts`：QA ID、原子问题链创建、绑定和生成请求；`roaming.ts`：漫游池与安全随机。
 - `src/app/styles/global.css`：主题 token、safe area、减少动态效果与阅读排版。
 
 ## 内容源与契约

@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   allocateChainId,
   buildGenerationRequest,
   createFollowUp,
   createQuestionChain,
+  createUnknownQuestionChain,
   reconcileQuestionChains,
 } from '../../src/app/data/question-chains'
 import { localState } from '../../src/app/state/local-state'
@@ -49,6 +50,16 @@ describe('linear question chains', () => {
     const second = await createQuestionChain(source, emptyIndex, '第二个问题')
     expect([first.chain.chain_id, second.chain.chain_id]).toEqual(['qa-0001', 'qa-0002'])
     await expect(createFollowUp(first.chain, source, formalIndex, '追问')).rejects.toThrow(/已有尚未导入/)
+  })
+  it('rolls back unknown state, chain, and draft together when initial draft creation fails', async () => {
+    const revision = localState.getRevision()
+    const add = vi.spyOn(readerDb.questionDrafts, 'add').mockRejectedValueOnce(new Error('draft write failed'))
+    await expect(createUnknownQuestionChain(source, emptyIndex, '原子问题')).rejects.toThrow('draft write failed')
+    expect(await localState.getNode(source.id)).toBeUndefined()
+    expect(await readerDb.questionChains.count()).toBe(0)
+    expect(await readerDb.questionDrafts.count()).toBe(0)
+    expect(localState.getRevision()).toBe(revision)
+    add.mockRestore()
   })
 
   it('creates a follow-up against the latest formal answer', async () => {

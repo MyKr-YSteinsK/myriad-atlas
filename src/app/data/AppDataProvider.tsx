@@ -1,39 +1,60 @@
-import { useEffect, useMemo, useState, type PropsWithChildren } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react'
 import { contentRepository, type ContentRepository } from '../../lib/content-client'
 import { ContentClientError } from '../../lib/errors'
 import { AppDataContext, type AppDataState } from './app-data-context'
 import { reconcileQuestionChains } from './question-chains'
+
+async function loadAppData(repository: ContentRepository, signal: AbortSignal) {
+  const [catalog, taxonomy, routes, qaIndex] = await Promise.all([
+    repository.loadCatalog(signal),
+    repository.loadTaxonomy(signal),
+    repository.loadRoutesIndex(signal),
+    repository.loadQaIndex(signal),
+  ])
+  return { catalog, taxonomy, routes, qaIndex }
+}
 
 export function AppDataProvider({
   children,
   repository = contentRepository,
 }: PropsWithChildren<{ repository?: ContentRepository }>) {
   const [state, setState] = useState<AppDataState>({ status: 'loading' })
-  useEffect(() => {
+  const stableState = useRef<Extract<AppDataState, { data: unknown }> | undefined>(undefined)
+  const loadSequence = useRef(0)
+  const activeController = useRef<AbortController | undefined>(undefined)
+  const load = useCallback(async (refreshing: boolean): Promise<void> => {
+    const sequence = ++loadSequence.current
+    activeController.current?.abort()
+    const previous = stableState.current
+    if (refreshing && previous) setState({ ...previous, refreshing: true, refreshError: undefined })
+    else setState({ status: 'loading' })
     const controller = new AbortController()
-    let active = true
-    Promise.all([
-      repository.loadCatalog(controller.signal),
-      repository.loadTaxonomy(controller.signal),
-      repository.loadRoutesIndex(controller.signal),
-      repository.loadQaIndex(controller.signal),
-    ]).then(([catalog, taxonomy, routes, qaIndex]) => {
-      if (!active) return
+    activeController.current = controller
+    try {
+      const { catalog, taxonomy, routes, qaIndex } = refreshing
+        ? await repository.reload(controller.signal)
+        : await loadAppData(repository, controller.signal)
+      if (sequence !== loadSequence.current) return
       const data = { catalog, taxonomy, routes, qaIndex, contentVersion: catalog.content_version }
-      setState({ status: catalog.nodes.length === 0 ? 'empty' : 'ready', data })
+      const next = { status: catalog.nodes.length === 0 ? 'empty' as const : 'ready' as const, data }
+      stableState.current = next
+      setState(next)
       void reconcileQuestionChains(qaIndex)
-    }).catch((reason: unknown) => {
-      if (!active || reason instanceof DOMException && reason.name === 'AbortError') return
-      setState({
-        status: 'error',
-        error: reason instanceof ContentClientError ? reason : new ContentClientError('application', '应用数据无法加载。'),
-      })
-    })
-    return () => {
-      active = false
-      controller.abort()
+    } catch (reason: unknown) {
+      if (sequence !== loadSequence.current || reason instanceof DOMException && reason.name === 'AbortError') return
+      const error = reason instanceof ContentClientError ? reason : new ContentClientError('application', '应用数据无法加载。')
+      if (previous) setState({ ...previous, refreshing: false, refreshError: error })
+      else setState({ status: 'error', error })
     }
   }, [repository])
-  const value = useMemo(() => ({ state, repository }), [repository, state])
+  useEffect(() => {
+    void load(false)
+    return () => {
+      loadSequence.current += 1
+      activeController.current?.abort()
+    }
+  }, [load])
+  const refresh = useCallback(() => load(true), [load])
+  const value = useMemo(() => ({ state, repository, refresh }), [refresh, repository, state])
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>
 }

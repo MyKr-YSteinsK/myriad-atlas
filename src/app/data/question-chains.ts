@@ -52,6 +52,34 @@ export async function createQuestionChain(
   return { chain, draft }
 }
 
+export async function createUnknownQuestionChain(
+  source: CatalogRecord,
+  qaIndex: RuntimeQaIndex,
+  question: string,
+): Promise<{ chain: LocalQuestionChain; draft: QuestionDraft }> {
+  const localChains = await localState.listQuestionChains()
+  const id = allocateChainId(qaIndex, localChains)
+  if (!id) throw new Error('qa-0001 至 qa-9999 已用尽，需要扩展规范')
+  const root = source.kind === 'qa'
+    ? qaIndex.chains.find((chain) => chain.answers.some((answer) => answer.node_id === source.id))?.root_node_id
+    : source.id
+  if (!root) throw new Error('QA 来源链异常，无法确定 root_node_id')
+  const now = timestamp()
+  const chain: LocalQuestionChain = {
+    chain_id: id, root_node_id: root, reserved_first_answer_id: id,
+    status: 'awaiting-import', created_at: now, updated_at: now,
+  }
+  const draft: QuestionDraft = {
+    draft_id: `${id}:initial`, chain_id: id, root_node_id: root, parent_node_id: null,
+    question: validateQuestion(question), source_title: source.title, source_domain_id: source.domain_id,
+    source_domain_name: source.domain_name, source_course_id: source.course_id, source_course_name: source.course_name,
+    source_path: source.source_path, source_content_version: qaIndex.content_version, status: 'awaiting-import',
+    copied_at: null, created_at: now, updated_at: now,
+  }
+  await localState.createUnknownQuestionChain(source.id, question, chain, draft)
+  return { chain, draft }
+}
+
 export async function createFollowUp(
   chain: LocalQuestionChain,
   source: CatalogRecord,

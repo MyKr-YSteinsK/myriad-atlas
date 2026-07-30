@@ -121,6 +121,21 @@ export const localState = {
     })
     changed()
   },
+  createUnknownQuestionChain: async (nodeId: string, note: string, chain: LocalQuestionChain, draft: QuestionDraft): Promise<void> => {
+    await readerDb.transaction('rw', readerDb.nodeStates, readerDb.questionChains, readerDb.questionDrafts, async () => {
+      if (await readerDb.questionChains.get(chain.chain_id)) throw new Error(`Question chain ${chain.chain_id} already exists`)
+      const timestamp = now()
+      const node = await readerDb.nodeStates.get(nodeId) ?? emptyNodeState(nodeId)
+      node.unknown = true
+      node.unknown_note = note.trim()
+      node.unknown_updated_at = timestamp
+      node.updated_at = timestamp
+      await readerDb.nodeStates.put(node)
+      await readerDb.questionChains.add(chain)
+      await readerDb.questionDrafts.add(draft)
+    })
+    changed()
+  },
   updateQuestionBinding: async (chain: LocalQuestionChain, draft: QuestionDraft): Promise<void> => {
     await readerDb.transaction('rw', readerDb.questionChains, readerDb.questionDrafts, async () => {
       await readerDb.questionChains.put(chain)
@@ -136,15 +151,25 @@ export const localState = {
       await readerDb.questionChains.put({ ...chain, status: 'hidden', updated_at: timestamp })
       await readerDb.pendingRemovals.put({
         id: `qa-chain:${chainId}`, kind: 'qa-chain', target_id: chainId, root_node_id: rootNodeId,
-        note: '', created_at: timestamp, updated_at: timestamp,
+        note: '', previous_status: chain.status === 'hidden' ? undefined : chain.status, created_at: timestamp, updated_at: timestamp,
       })
     })
     changed()
   },
   undoHiddenQuestionChain: async (chainId: string): Promise<void> => {
-    await readerDb.transaction('rw', readerDb.questionChains, readerDb.pendingRemovals, async () => {
+    await readerDb.transaction('rw', readerDb.questionChains, readerDb.questionDrafts, readerDb.pendingRemovals, async () => {
       const chain = await readerDb.questionChains.get(chainId)
-      if (chain) await readerDb.questionChains.put({ ...chain, status: 'answered', updated_at: now() })
+      const removal = await readerDb.pendingRemovals.get(`qa-chain:${chainId}`)
+      if (!chain || !removal) throw new Error(`Question chain ${chainId} cannot be restored`)
+      const pendingDraft = await readerDb.questionDrafts.where('chain_id').equals(chainId).filter(
+        (draft) => draft.status === 'editing' || draft.status === 'awaiting-import',
+      ).first()
+      const resolvedDraft = await readerDb.questionDrafts.where('chain_id').equals(chainId).filter(
+        (draft) => draft.status === 'resolved',
+      ).first()
+      const status = removal.previous_status ?? (pendingDraft ? 'awaiting-import' : resolvedDraft ? 'answered' : undefined)
+      if (!status) throw new Error(`Question chain ${chainId} has no reliable previous status`)
+      await readerDb.questionChains.put({ ...chain, status, updated_at: now() })
       await readerDb.pendingRemovals.delete(`qa-chain:${chainId}`)
     })
     changed()

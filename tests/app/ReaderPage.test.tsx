@@ -53,4 +53,11 @@ describe('immersive reader', () => {
     view.unmount()
     await waitFor(async () => expect((await readerDb.nodeStates.get(previewNode.id))?.completed).toBe(false))
   })
+  it('flushes a pending reader setting during a fast unmount', async () => {
+    const view = render(<MemoryRouter><ReaderPage node={previewNode} catalog={{ schema_version: 1, content_version: 'preview', nodes: [] }} /></MemoryRouter>)
+    await userEvent.click(screen.getByRole('button', { name: '阅读设置' }))
+    fireEvent.change(screen.getByRole('slider', { name: '字号' }), { target: { value: '21' } })
+    view.unmount()
+    await waitFor(async () => expect((await readerDb.settings.get('reader.preferences'))?.value.fontSize).toBe(21))
+  })
 })

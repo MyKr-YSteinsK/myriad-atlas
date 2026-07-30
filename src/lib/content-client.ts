@@ -27,6 +27,7 @@ function safeId(value: string): boolean {
 export class ContentRepository {
   private readonly cache = new Map<string, unknown>()
   private expectedContentVersion?: string
+  private generation = 0
 
   constructor(private readonly fetcher: FetchLike = globalThis.fetch.bind(globalThis)) {}
 
@@ -59,11 +60,33 @@ export class ContentRepository {
   private async load<T>(path: string, label: string, check: (value: Record<string, unknown>) => boolean, signal?: AbortSignal): Promise<T> {
     const cached = this.cache.get(path)
     if (cached) return cached as T
+    const generation = this.generation
     const value = await this.fetchJson(path, signal)
+    if (generation !== this.generation) return this.load(path, label, check, signal)
     this.acceptEnvelope(value, label)
     if (!check(value)) throw new ContentClientError('malformed', `${label}缺少必要字段。`)
     this.cache.set(path, value)
     return value as T
+  }
+  invalidate(): void {
+    this.generation += 1
+    this.cache.clear()
+    this.expectedContentVersion = undefined
+  }
+  async reload(signal?: AbortSignal): Promise<{
+    catalog: RuntimeCatalog
+    taxonomy: RuntimeTaxonomy
+    routes: RuntimeRoutesIndex
+    qaIndex: RuntimeQaIndex
+  }> {
+    this.invalidate()
+    const [catalog, taxonomy, routes, qaIndex] = await Promise.all([
+      this.loadCatalog(signal),
+      this.loadTaxonomy(signal),
+      this.loadRoutesIndex(signal),
+      this.loadQaIndex(signal),
+    ])
+    return { catalog, taxonomy, routes, qaIndex }
   }
 
   loadCatalog(signal?: AbortSignal): Promise<RuntimeCatalog> {

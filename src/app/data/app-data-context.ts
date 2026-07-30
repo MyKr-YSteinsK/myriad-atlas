@@ -12,10 +12,10 @@ export interface AppData {
 }
 export type AppDataState =
   | { status: 'loading' }
-  | { status: 'ready' | 'empty'; data: AppData }
+  | { status: 'ready' | 'empty'; data: AppData; refreshing?: boolean; refreshError?: ContentClientError }
   | { status: 'error'; error: ContentClientError }
 
-export const AppDataContext = createContext<{ state: AppDataState; repository: ContentRepository } | undefined>(undefined)
+export const AppDataContext = createContext<{ state: AppDataState; repository: ContentRepository; refresh: () => Promise<void> } | undefined>(undefined)
 
 export function useAppData() {
   const value = useContext(AppDataContext)
