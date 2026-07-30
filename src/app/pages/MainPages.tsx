@@ -10,7 +10,6 @@ function StatePage({ title, emptyText }: { title: string; emptyText: string }) {
   </section>
 }
 
-export function RoutesPage() { return <StatePage title="路线" emptyText="当前没有正式路线。" /> }
 export function LibraryPage() { return <StatePage title="知识库" emptyText="当前没有正式节点。" /> }
 export function RoamingPage() { return <StatePage title="随机漫游" emptyText="当前没有漫游内容。" /> }
 export function MePage() { return <StatePage title="我的" emptyText="尚无个人状态。" /> }

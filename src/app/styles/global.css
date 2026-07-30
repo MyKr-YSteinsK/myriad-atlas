@@ -68,6 +68,19 @@ button, input, select { font: inherit; }
 .home-facts dl div { border-left: 1px solid var(--color-line); padding: .75rem; }
 .home-facts dt { color: var(--color-muted); font-size: .75rem; }.home-facts dd { font-size: 1.8rem; margin: .25rem 0 0; }
 .local-state-warning { border-left: 3px solid var(--color-accent); padding-left: .75rem; }
+.route-index, .route-stages, .route-module ol { list-style: none; margin: 2rem 0 0; padding: 0; }
+.route-index > li { border-top: 1px solid var(--color-line); display: grid; gap: 1rem; grid-template-columns: 4rem 1fr; padding: 1.25rem 0 2rem; }
+.route-code { color: var(--color-muted); font-variant-numeric: tabular-nums; letter-spacing: .08em; }
+.route-index h2 a, .route-detail-page a { color: var(--color-text); }
+.route-index p, .route-detail-page p { color: var(--color-muted); line-height: 1.6; }
+.route-line { background: var(--color-line); height: 2px; margin: 1rem 0; overflow: hidden; }.route-line i { background: var(--color-accent); display: block; height: 100%; transform-origin: left; }
+.route-overview { align-items: start; border-block: 1px solid var(--color-line); display: grid; gap: .5rem 1rem; grid-template-columns: auto 1fr; margin: 2rem 0; padding: 1rem 0; }
+.route-overview strong { font-size: 1.8rem; }.route-overview a, .route-overview p { grid-column: 1 / -1; min-height: 44px; }
+.route-stages > li { border-left: 1px solid var(--color-line); margin-left: .5rem; padding: 0 0 3rem 1.5rem; position: relative; }
+.route-stages > li::before { background: var(--color-canvas); border: 2px solid var(--color-accent); content: ""; height: .65rem; left: -.4rem; position: absolute; top: .2rem; transform: rotate(45deg); width: .65rem; }
+.route-module { margin-top: 2rem; }.route-module h3 { font-size: 1.15rem; }
+.route-module li { border-top: 1px solid var(--color-line); display: grid; gap: .8rem; grid-template-columns: 2.5rem 1fr; padding: 1rem 0; }
+.route-module h4 { margin: .25rem 0; }.route-module li[data-completed='true'] h4 { text-decoration: line-through; text-decoration-color: var(--color-muted); }
 @keyframes atlas-enter { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: translateX(0); } }
 
 .app-shell {
