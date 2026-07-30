@@ -7,6 +7,7 @@ import { compileNodes, contentVersion } from './compile-node'
 import { compileQaIndex } from './compile-qa-index'
 import { compileRoutes } from './compile-routes'
 import { compileTaxonomy } from './compile-taxonomy'
+import { compileKnowledgeMap } from './compile-knowledge-map'
 import {
   defaultContentWorkspace,
   generatedRoot,
@@ -85,6 +86,9 @@ export async function buildAllContent(options: ContentBuildOptions = {}): Promis
     await writeJson(resolve(stagingRoot, 'taxonomy.json'), taxonomy)
     await writeJson(resolve(stagingRoot, 'catalog.json'), catalog)
     await writeJson(resolve(stagingRoot, 'qa-index.json'), qaIndex)
+    const knowledgeMap = compileKnowledgeMap(validation, version)
+    await assertRuntimeSchema('knowledge-map.schema.json', knowledgeMap, workspace.schemasRoot)
+    await writeJson(resolve(stagingRoot, 'knowledge-map.json'), knowledgeMap)
     for (const route of routes) await writeJson(resolve(stagingRoot, 'routes', `${route.id}.json`), route)
     await writeJson(resolve(stagingRoot, 'routes.json'), {
       schema_version: 1,

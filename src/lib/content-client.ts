@@ -4,6 +4,7 @@ import type {
   RuntimeAppChangelog,
   RuntimeContentManifest,
   RuntimeKnowledgeChangelog,
+  RuntimeKnowledgeMap,
   RuntimeNode,
   RuntimeQaIndex,
   RuntimeRoute,
@@ -182,6 +183,9 @@ export class ContentRepository {
     ])
     if (log.current_version !== catalog.content_version) throw new ContentClientError('application', '知识版本日志与目录版本不一致。')
     return log
+  }
+  loadKnowledgeMap(signal?: AbortSignal): Promise<RuntimeKnowledgeMap> {
+    return this.load('_generated/knowledge-map.json', '知识地图', (value) => Array.isArray(value.nodes) && Array.isArray(value.edges) && Array.isArray(value.domains), signal)
   }
   async loadNode(nodeId: string, signal?: AbortSignal): Promise<RuntimeNode> {
     if (!safeId(nodeId)) throw new ContentClientError('missing', '节点 ID 无效。')
