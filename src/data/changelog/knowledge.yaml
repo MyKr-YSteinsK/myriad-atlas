@@ -1,0 +1,11 @@
+schema_version: 1
+current_version: 2026.07.30-01
+entries:
+  - version: 2026.07.30-01
+    date: 2026-07-30
+    summary: 初始化知识内容结构与构建契约。
+    categories:
+      - system
+    added_nodes: []
+    modified_nodes: []
+    deleted_nodes: []

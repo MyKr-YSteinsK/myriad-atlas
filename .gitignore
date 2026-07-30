@@ -4,6 +4,8 @@ coverage/
 public/_generated/
 .tmp/
 tmp/
-inbox/processed/
-inbox/reports/
+inbox/processed/*
+!inbox/processed/.gitkeep
+inbox/reports/*
+!inbox/reports/.gitkeep
 *.local
