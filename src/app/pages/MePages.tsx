@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAppData } from '../data/app-data-context'
 import { ReaderSettings } from '../reader/ReaderSettings'
@@ -6,6 +6,9 @@ import { useReaderPreferencePersistence } from '../reader/use-reader-preference-
 import { localState } from '../state/local-state'
 import { type Opinion } from '../state/reader-db'
 import { useLocalStateSnapshot } from '../state/use-local-state'
+import { APP_VERSION } from '../../lib/content-version'
+import { InstallGuidance } from '../../pwa/InstallGuidance'
+import { useAppUpdate, useUpdateFlush } from '../../pwa/app-update-context'
 
 function useCatalog() {
   const { state } = useAppData()
@@ -33,6 +36,8 @@ function StateList({ mode }: { mode: 'completed' | 'favorite' | 'unknown' }) {
 
 export function MePage() {
   const local = useLocalStateSnapshot()
+  const appData = useAppData()
+  const appUpdate = useAppUpdate()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsButton = useRef<HTMLButtonElement>(null)
   const { preferences, storageWarning, update, reset } = useReaderPreferencePersistence()
@@ -46,6 +51,13 @@ export function MePage() {
   ] as const
   return <section className="atlas-page me-page"><p className="atlas-coordinate">LOCAL / ME</p><h1 tabIndex={-1}>我的</h1><ol>{entries.map(([to, label, count]) => <li key={to}><Link to={to}>{label}<span>{count}</span></Link></li>)}</ol>
     <section><h2>阅读设置</h2><p>{preferences.font === 'serif' ? '衬线' : '系统字体'} · {preferences.theme} · {preferences.fontSize}px</p>{storageWarning && <p role="status">阅读设置暂未写入本地。</p>}<button ref={settingsButton} type="button" onClick={() => setSettingsOpen(true)}>调整阅读设置</button></section>
+    <section className="app-management"><h2>应用与安装</h2><p>当前应用版本：{APP_VERSION}</p>
+      {appUpdate.state.status === 'offline-ready' && <p role="status">应用离线外壳已准备好。</p>}
+      {appUpdate.state.status === 'update-available' && <p role="status">{appUpdate.state.targetVersion ? `新应用版本 ${appUpdate.state.targetVersion} 可用。` : '新应用版本可用。'}</p>}
+      {appUpdate.state.status === 'error' && <p role="status">{appUpdate.state.error}</p>}
+      <InstallGuidance />
+    </section>
+    {(appData.state.status === 'ready' || appData.state.status === 'empty') && <section className="app-changelog"><h2>应用更新说明</h2><ol>{appData.state.data.appChangelog.entries.map((entry) => <li key={`${entry.version}-${entry.date}`}><strong>{entry.version}</strong><span>{entry.date}</span><p>{entry.summary}</p></li>)}</ol></section>}
     <p className="future-note">完整离线、备份恢复与更新管理将在后续阶段提供。</p>
     <ReaderSettings open={settingsOpen} preferences={preferences} onChange={update} onReset={reset} onClose={() => setSettingsOpen(false)} triggerRef={settingsButton} />
   </section>
@@ -73,18 +85,19 @@ export function OpinionsPage() {
   const [routeId, setRouteId] = useState('')
   const [fallback, setFallback] = useState('')
   const routes = state.status === 'ready' || state.status === 'empty' ? state.data.routes.routes : []
-  const save = (): void => {
+  const save = useCallback(async (): Promise<void> => {
     if (!text.trim()) return
     const timestamp = new Date().toISOString()
     const id = crypto.randomUUID()
-    void localState.saveOpinion({ id, scope: routeId ? 'route' : 'global', route_id: routeId || null, text: text.trim(), created_at: timestamp, updated_at: timestamp })
+    await localState.saveOpinion({ id, scope: routeId ? 'route' : 'global', route_id: routeId || null, text: text.trim(), created_at: timestamp, updated_at: timestamp })
     setText('')
-  }
+  }, [routeId, text])
+  useUpdateFlush(save)
   const copy = async (values: Opinion[]): Promise<void> => {
     const value = opinionText(values)
     try { await navigator.clipboard.writeText(value); setFallback('') } catch { setFallback(value) }
   }
-  return <section className="atlas-page opinions-page"><h1 tabIndex={-1}>意见</h1><div className="opinion-editor"><label>范围<select value={routeId} onChange={(event) => setRouteId(event.target.value)}><option value="">总体意见</option>{routes.map((route) => <option key={route.id} value={route.id}>{route.name}</option>)}</select></label><label>意见<textarea value={text} onChange={(event) => setText(event.target.value)} /></label><button type="button" onClick={save}>新增意见</button></div><div><button type="button" onClick={() => void copy(local.opinions)}>复制全部意见</button>{routes.map((route) => <button type="button" key={route.id} onClick={() => void copy(local.opinions.filter((entry) => entry.route_id === route.id))}>复制“{route.name}”意见</button>)}</div>{fallback && <textarea aria-label="手动复制意见" readOnly value={fallback} />}
+  return <section className="atlas-page opinions-page"><h1 tabIndex={-1}>意见</h1><div className="opinion-editor"><label>范围<select value={routeId} onChange={(event) => setRouteId(event.target.value)}><option value="">总体意见</option>{routes.map((route) => <option key={route.id} value={route.id}>{route.name}</option>)}</select></label><label>意见<textarea value={text} onChange={(event) => setText(event.target.value)} /></label><button type="button" onClick={() => void save()}>新增意见</button></div><div><button type="button" onClick={() => void copy(local.opinions)}>复制全部意见</button>{routes.map((route) => <button type="button" key={route.id} onClick={() => void copy(local.opinions.filter((entry) => entry.route_id === route.id))}>复制“{route.name}”意见</button>)}</div>{fallback && <textarea aria-label="手动复制意见" readOnly value={fallback} />}
     <ol className="me-state-list">{local.opinions.map((entry) => <li key={entry.id}><p>{entry.scope === 'route' ? routes.find((route) => route.id === entry.route_id)?.name ?? `${entry.route_id}（路线不可用）` : '总体'}</p><textarea value={entry.text} onChange={(event) => void localState.saveOpinion({ ...entry, text: event.target.value })} /><button type="button" onClick={() => void copy([entry])}>复制</button><button type="button" onClick={() => { if (window.confirm('删除这条意见？')) void localState.deleteOpinion(entry.id) }}>删除</button></li>)}</ol>
   </section>
 }

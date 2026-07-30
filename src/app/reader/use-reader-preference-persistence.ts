@@ -27,19 +27,16 @@ export function useReaderPreferencePersistence() {
     const pending = pendingRef.current
     if (!pending) return
     pendingRef.current = undefined
-    savesRef.current = savesRef.current.catch(() => undefined).then(async () => {
-      try {
-        await saveReaderPreferences(pending)
-      } catch {
-        reportFailure()
-      }
+    savesRef.current = savesRef.current.catch(() => undefined).then(() => saveReaderPreferences(pending)).catch((reason: unknown) => {
+      reportFailure()
+      throw reason
     })
     await savesRef.current
   }, [reportFailure])
   const schedule = useCallback((next: ReaderPreferences) => {
     pendingRef.current = next
     if (timerRef.current) window.clearTimeout(timerRef.current)
-    timerRef.current = window.setTimeout(() => { void flush() }, SAVE_DELAY_MS)
+    timerRef.current = window.setTimeout(() => { void flush().catch(() => undefined) }, SAVE_DELAY_MS)
   }, [flush])
   const update = useCallback((patch: Partial<ReaderPreferences>) => {
     changedRef.current = true
@@ -60,13 +57,14 @@ export function useReaderPreferencePersistence() {
     return () => { active = false }
   }, [reportFailure])
   useEffect(() => {
-    const flushOnHidden = (): void => { if (document.visibilityState === 'hidden') void flush() }
-    window.addEventListener('pagehide', flush)
+    const flushOnHidden = (): void => { if (document.visibilityState === 'hidden') void flush().catch(() => undefined) }
+    const flushOnPageHide = (): void => { void flush().catch(() => undefined) }
+    window.addEventListener('pagehide', flushOnPageHide)
     document.addEventListener('visibilitychange', flushOnHidden)
     return () => {
-      void flush()
+      void flush().catch(() => undefined)
       mountedRef.current = false
-      window.removeEventListener('pagehide', flush)
+      window.removeEventListener('pagehide', flushOnPageHide)
       document.removeEventListener('visibilitychange', flushOnHidden)
     }
   }, [flush])

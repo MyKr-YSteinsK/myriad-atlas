@@ -9,6 +9,7 @@ import { SearchPage } from './pages/SearchPage'
 import { QuestionDetailPage, QuestionsPage } from './pages/QuestionPages'
 import { NodePage } from './pages/NodePage'
 import { AppLayout } from './layout/AppLayout'
+import { AppUpdateNotice } from '../pwa/AppUpdateNotice'
 
 const DevReaderPreview = import.meta.env.DEV ? lazy(() => import('./reader/dev/ReaderPreviewPage')) : undefined
 function NotFoundPage() {
@@ -16,7 +17,7 @@ function NotFoundPage() {
 }
 
 export function App() {
-  return <Routes>
+  return <><Routes>
     <Route element={<AppLayout />}>
       <Route path="/" element={<HomePage />} />
       <Route path="/routes" element={<RoutesPage />} />
@@ -38,5 +39,5 @@ export function App() {
     </Route>
     <Route path="/node/:nodeId" element={<NodePage />} />
     {DevReaderPreview && <Route path="/__reader-preview" element={<Suspense fallback={null}><DevReaderPreview /></Suspense>} />}
-  </Routes>
+  </Routes><AppUpdateNotice /></>
 }

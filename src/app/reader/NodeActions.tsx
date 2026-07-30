@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import type { RuntimeCatalog, RuntimeNode, RuntimeRoute } from '../../content/types'
 import { contentRepository } from '../../lib/content-client'
@@ -7,6 +7,7 @@ import { createFollowUp, createUnknownQuestionChain } from '../data/question-cha
 import { useOptionalAppData } from '../data/app-data-context'
 import { localState } from '../state/local-state'
 import { useLocalStateSnapshot } from '../state/use-local-state'
+import { useUpdateFlush } from '../../pwa/app-update-context'
 
 export function NodeActions({ node, catalog }: { node: RuntimeNode; catalog?: RuntimeCatalog }) {
   const local = useLocalStateSnapshot()
@@ -18,6 +19,10 @@ export function NodeActions({ node, catalog }: { node: RuntimeNode; catalog?: Ru
   const [error, setError] = useState('')
   const [undoNote, setUndoNote] = useState<string>()
   const [route, setRoute] = useState<RuntimeRoute>()
+  const flushQuestionInput = useCallback(async () => {
+    if (unknownOpen && note.trim()) await localState.setUnknown(node.id, note)
+  }, [node.id, note, unknownOpen])
+  useUpdateFlush(flushQuestionInput)
   const parameters = new URLSearchParams(location.search)
   const source = parameters.get('source')
   const state = local.nodeStates.find((entry) => entry.node_id === node.id)

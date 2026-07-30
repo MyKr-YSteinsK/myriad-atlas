@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import type { RuntimeCatalog, RuntimeNode } from '../../content/types'
 import { localState } from '../state/local-state'
 import { ReaderSettings } from './ReaderSettings'
 import { NodeActions } from './NodeActions'
 import { useReaderPreferencePersistence } from './use-reader-preference-persistence'
+import { useUpdateFlush } from '../../pwa/app-update-context'
 
 interface ReaderPageProps { node: RuntimeNode; catalog?: RuntimeCatalog }
 
@@ -32,8 +33,14 @@ export function ReaderPage({ node, catalog }: ReaderPageProps) {
   const heading = useRef<HTMLHeadingElement>(null)
   const progressTimer = useRef<number | undefined>(undefined)
   const latestProgress = useRef({ ratio: 0, anchor: '' })
+  const progressFlush = useRef<() => Promise<void>>(async () => undefined)
   const lastScrollY = useRef(0)
-  const { preferences, storageWarning, update: updatePreferences, reset: resetPreferences } = useReaderPreferencePersistence()
+  const { preferences, storageWarning, update: updatePreferences, reset: resetPreferences, flush: flushPreferences } = useReaderPreferencePersistence()
+  const flushBeforeUpdate = useCallback(async () => {
+    await flushPreferences()
+    await progressFlush.current()
+  }, [flushPreferences])
+  useUpdateFlush(flushBeforeUpdate)
 
   useEffect(() => {
     document.title = `${node.title}｜万象回廊 · MyKr`
@@ -50,16 +57,20 @@ export function ReaderPage({ node, catalog }: ReaderPageProps) {
   useEffect(() => {
     let active = true
     const tocIds = node.toc.map((entry) => entry.id)
-    const flush = (): void => {
+    const flush = async (): Promise<void> => {
       if (progressTimer.current) {
         window.clearTimeout(progressTimer.current)
         progressTimer.current = undefined
       }
       const latest = latestProgress.current
-      localState.saveReadingProgress(node.id, latest.ratio, latest.anchor, tocIds).catch(() => {
+      try {
+        await localState.saveReadingProgress(node.id, latest.ratio, latest.anchor, tocIds)
+      } catch (reason) {
         if (active) setProgressWarning(true)
-      })
+        throw reason
+      }
     }
+    progressFlush.current = flush
     localState.getNode(node.id).then((state) => {
       if (!active || !state?.reading_progress) return
       const saved = state.reading_progress
@@ -83,22 +94,23 @@ export function ReaderPage({ node, catalog }: ReaderPageProps) {
       if (progressTimer.current) return
       progressTimer.current = window.setTimeout(() => {
         progressTimer.current = undefined
-        flush()
+        void flush().catch(() => undefined)
       }, 800)
     }
     const onVisibilityChange = (): void => {
-      if (document.visibilityState === 'hidden') flush()
+      if (document.visibilityState === 'hidden') void flush().catch(() => undefined)
     }
     window.addEventListener('scroll', onScroll, { passive: true })
-    window.addEventListener('pagehide', flush)
+    const flushOnPageHide = (): void => { void flush().catch(() => undefined) }
+    window.addEventListener('pagehide', flushOnPageHide)
     document.addEventListener('visibilitychange', onVisibilityChange)
     onScroll()
     return () => {
       active = false
       window.removeEventListener('scroll', onScroll)
-      window.removeEventListener('pagehide', flush)
+      window.removeEventListener('pagehide', flushOnPageHide)
       document.removeEventListener('visibilitychange', onVisibilityChange)
-      flush()
+      void flush().catch(() => undefined)
     }
   }, [node.id, node.toc])
 
