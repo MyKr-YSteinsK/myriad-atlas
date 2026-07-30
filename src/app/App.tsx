@@ -1,7 +1,8 @@
 import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import { HomePage } from './pages/HomePage'
-import { LibraryPage, MePage, RoamingPage } from './pages/MainPages'
+import { MePage, RoamingPage } from './pages/MainPages'
+import { CoursePage, DomainPage, LibraryPage } from './pages/LibraryPages'
 import { RouteDetailPage, RoutesPage } from './pages/RoutePages'
 import { NodePage } from './pages/NodePage'
 import { AppLayout } from './layout/AppLayout'
@@ -35,8 +36,8 @@ export function App() {
       <Route path="/routes" element={<RoutesPage />} />
       <Route path="/route/:routeId" element={<RouteDetailPage />} />
       <Route path="/library" element={<LibraryPage />} />
-      <Route path="/library/:domainId" element={<PlaceholderPage title="领域" />} />
-      <Route path="/library/:domainId/:courseId" element={<PlaceholderPage title="课程" />} />
+      <Route path="/library/:domainId" element={<DomainPage />} />
+      <Route path="/library/:domainId/:courseId" element={<CoursePage />} />
       <Route path="/search" element={<PlaceholderPage title={titles.search} />} />
       <Route path="/roaming" element={<RoamingPage />} />
       <Route path="/me" element={<MePage />} />

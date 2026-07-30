@@ -81,6 +81,15 @@ button, input, select { font: inherit; }
 .route-module { margin-top: 2rem; }.route-module h3 { font-size: 1.15rem; }
 .route-module li { border-top: 1px solid var(--color-line); display: grid; gap: .8rem; grid-template-columns: 2.5rem 1fr; padding: 1rem 0; }
 .route-module h4 { margin: .25rem 0; }.route-module li[data-completed='true'] h4 { text-decoration: line-through; text-decoration-color: var(--color-muted); }
+.domain-index, .course-index, .node-index { list-style: none; margin: 2rem 0; padding: 0; }
+.domain-index > li { border-top: 1px solid var(--color-line); display: grid; gap: 1rem; grid-template-columns: 2.5rem 1fr; padding: 1.5rem 0; }
+.domain-index h2 a, .course-index h2 a, .node-index h2 a { color: var(--color-text); }
+.domain-index ul { list-style: none; padding: 0; }.domain-index ul li { align-items: center; border-top: 1px dotted var(--color-line); display: flex; justify-content: space-between; min-height: 44px; }.domain-index ul span { color: var(--color-muted); font-size: .8rem; }
+.course-index > li { border-top: 1px solid var(--color-line); padding: 1.25rem 0; }.course-index dl { display: grid; grid-template-columns: repeat(4, 1fr); }.course-index dl div { border-left: 1px solid var(--color-line); padding: .4rem; }.course-index dd { margin: .2rem 0; }
+.course-controls { display: grid; gap: 1rem; margin: 2rem 0 1rem; }.course-controls label { display: grid; gap: .35rem; }.course-controls input, .course-controls select { background: var(--color-surface); border: 1px solid var(--color-line); color: var(--color-text); min-height: 44px; padding: .5rem; width: 100%; }
+.course-filters { display: flex; flex-wrap: wrap; gap: .5rem; }.course-filters button { background: transparent; border: 1px solid var(--color-line); color: var(--color-text); min-height: 44px; padding: .5rem .8rem; }.course-filters button[aria-pressed='true'] { border-color: var(--color-accent); font-weight: 700; }
+.node-index > li { border-top: 1px solid var(--color-line); display: grid; gap: 1rem; grid-template-columns: 3rem 1fr; padding: 1rem 0; }.node-index p { color: var(--color-muted); line-height: 1.5; }.node-index h2 { font-size: 1.25rem; }
+@media (min-width: 640px) { .course-controls { grid-template-columns: 14rem 1fr; } }
 @keyframes atlas-enter { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: translateX(0); } }
 
 .app-shell {
