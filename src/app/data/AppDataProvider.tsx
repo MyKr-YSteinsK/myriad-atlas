@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type PropsWithChildren } from 'react'
 import { contentRepository, type ContentRepository } from '../../lib/content-client'
 import { ContentClientError } from '../../lib/errors'
 import { AppDataContext, type AppDataState } from './app-data-context'
+import { reconcileQuestionChains } from './question-chains'
 
 export function AppDataProvider({
   children,
@@ -20,6 +21,7 @@ export function AppDataProvider({
       if (!active) return
       const data = { catalog, taxonomy, routes, qaIndex, contentVersion: catalog.content_version }
       setState({ status: catalog.nodes.length === 0 ? 'empty' : 'ready', data })
+      void reconcileQuestionChains(qaIndex)
     }).catch((reason: unknown) => {
       if (!active || reason instanceof DOMException && reason.name === 'AbortError') return
       setState({

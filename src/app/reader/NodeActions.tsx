@@ -3,11 +3,14 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import type { RuntimeCatalog, RuntimeNode, RuntimeRoute } from '../../content/types'
 import { contentRepository } from '../../lib/content-client'
 import { continueRoute } from '../data/route-progress'
+import { createFollowUp, createQuestionChain } from '../data/question-chains'
+import { useOptionalAppData } from '../data/app-data-context'
 import { localState } from '../state/local-state'
 import { useLocalStateSnapshot } from '../state/use-local-state'
 
 export function NodeActions({ node, catalog }: { node: RuntimeNode; catalog?: RuntimeCatalog }) {
   const local = useLocalStateSnapshot()
+  const appData = useOptionalAppData()
   const location = useLocation()
   const navigate = useNavigate()
   const [unknownOpen, setUnknownOpen] = useState(false)
@@ -38,6 +41,31 @@ export function NodeActions({ node, catalog }: { node: RuntimeNode; catalog?: Ru
   const courseNext = source === 'course' ? catalog?.nodes.filter((entry) => entry.domain_id === node.domain_id && entry.course_id === node.course_id)
     .filter((entry) => !local.nodeStates.find((value) => value.node_id === entry.id)?.uninterested)
     .sort((a, b) => a.sequence - b.sequence).find((entry) => entry.sequence > node.sequence) : undefined
+  const createQuestion = async (): Promise<void> => {
+    if (!appData || appData.state.status !== 'ready' && appData.state.status !== 'empty') throw new Error('问题链数据尚未加载')
+    const record = appData.state.data.catalog.nodes.find((entry) => entry.id === node.id)
+    if (!record) throw new Error('来源节点不在目录中')
+    await localState.setUnknown(node.id, note)
+    if (node.qa) {
+      const formal = appData.state.data.qaIndex.chains.find((entry) => entry.chain_id === node.qa!.chain_id)
+      if (!formal) throw new Error('正式问题链索引缺失')
+      let chain = local.questionChains.find((entry) => entry.chain_id === formal.chain_id)
+      if (!chain) {
+        const timestamp = new Date().toISOString()
+        chain = {
+          chain_id: formal.chain_id, root_node_id: formal.root_node_id,
+          reserved_first_answer_id: formal.answers[0].node_id, status: 'answered',
+          created_at: timestamp, updated_at: timestamp,
+        }
+        await localState.saveQuestionChain(chain)
+      }
+      await createFollowUp(chain, record, appData.state.data.qaIndex, note)
+      navigate(`/me/questions/${chain.chain_id}`)
+    } else {
+      const created = await createQuestionChain(record, appData.state.data.qaIndex, note)
+      navigate(`/me/questions/${created.chain.chain_id}`)
+    }
+  }
 
   return <section className="node-actions" aria-labelledby="node-actions-title"><h2 id="node-actions-title">节点状态</h2>
     {error && <p role="alert">{error}</p>}
@@ -60,7 +88,7 @@ export function NodeActions({ node, catalog }: { node: RuntimeNode; catalog?: Ru
         })
       }}>不感兴趣</button>}</div>
     {undoNote !== undefined && <p role="status">已取消不会。<button type="button" onClick={() => { run(() => localState.undoClearUnknown(node.id, undoNote)); setUndoNote(undefined) }}>撤销</button></p>}
-    {unknownOpen && <div className="node-action-dialog" role="dialog" aria-modal="true" aria-labelledby="unknown-title"><h3 id="unknown-title">不会／追问</h3><label>备注<textarea value={note} onChange={(event) => setNote(event.target.value)} /></label><button type="button" onClick={() => { run(() => localState.setUnknown(node.id, note)); setUnknownOpen(false) }}>保存标记</button><button type="button" onClick={() => setUnknownOpen(false)}>取消</button><p>保存后可在“我的 → 问题链”新建正式问题链。</p></div>}
+    {unknownOpen && <div className="node-action-dialog" role="dialog" aria-modal="true" aria-labelledby="unknown-title"><h3 id="unknown-title">不会／追问</h3><label>具体问题或备注<textarea value={note} maxLength={5000} onChange={(event) => setNote(event.target.value)} /></label><button type="button" onClick={() => { run(() => localState.setUnknown(node.id, note)); setUnknownOpen(false) }}>只保存不会</button><button type="button" onClick={() => { run(createQuestion); setUnknownOpen(false) }}>{node.qa ? '继续追问' : '新建问题链'}</button><button type="button" onClick={() => setUnknownOpen(false)}>取消</button></div>}
     <nav aria-label="下一节点">{source === 'route' && routeTarget && routeTarget.unit.node_id !== node.id && <Link to={`/node/${routeTarget.unit.node_id}?source=route&route=${route!.id}&stage=${routeTarget.stageId}&module=${routeTarget.moduleId}`}>下一节点：{routeTarget.unit.title}</Link>}{source === 'course' && courseNext && <Link to={`/node/${courseNext.id}?source=course&domain=${node.domain_id}&course=${node.course_id}`}>课程下一篇：{courseNext.title}</Link>}{source === 'roaming' && <Link to="/roaming">换一个</Link>}{(source === 'search' || source === 'home' || !source) && <Link to={source === 'search' ? '/search' : '/'}>返回来源</Link>}</nav>
   </section>
 }

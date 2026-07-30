@@ -37,6 +37,10 @@ export const localState = {
   getNode: (nodeId: string): Promise<NodeState | undefined> => readerDb.nodeStates.get(nodeId),
   listNodeStates: (): Promise<NodeState[]> => readerDb.nodeStates.toArray(),
   listRoutePositions: (): Promise<RoutePosition[]> => readerDb.routePositions.toArray(),
+  listQuestionChains: (): Promise<LocalQuestionChain[]> => readerDb.questionChains.toArray(),
+  listQuestionDrafts: (): Promise<QuestionDraft[]> => readerDb.questionDrafts.toArray(),
+  listPendingRemovals: (): Promise<PendingRemoval[]> => readerDb.pendingRemovals.toArray(),
+  listOpinions: (): Promise<Opinion[]> => readerDb.opinions.toArray(),
   toggleCompleted: (nodeId: string): Promise<NodeState> => updateNode(nodeId, (value, timestamp) => {
     value.completed = !value.completed
     value.completed_at = value.completed ? timestamp : null
@@ -108,6 +112,50 @@ export const localState = {
     await readerDb.questionChains.put({ ...value, updated_at: now() }); changed()
   },
   deleteQuestionChain: async (id: string): Promise<void> => { await readerDb.questionChains.delete(id); changed() },
+  createQuestionChain: async (chain: LocalQuestionChain, draft: QuestionDraft): Promise<void> => {
+    await readerDb.transaction('rw', readerDb.questionChains, readerDb.questionDrafts, async () => {
+      if (await readerDb.questionChains.get(chain.chain_id)) throw new Error(`Question chain ${chain.chain_id} already exists`)
+      await readerDb.questionChains.add(chain)
+      await readerDb.questionDrafts.add(draft)
+    })
+    changed()
+  },
+  updateQuestionBinding: async (chain: LocalQuestionChain, draft: QuestionDraft): Promise<void> => {
+    await readerDb.transaction('rw', readerDb.questionChains, readerDb.questionDrafts, async () => {
+      await readerDb.questionChains.put(chain)
+      await readerDb.questionDrafts.put(draft)
+    })
+    changed()
+  },
+  hideQuestionChain: async (chainId: string, rootNodeId: string): Promise<void> => {
+    await readerDb.transaction('rw', readerDb.questionChains, readerDb.pendingRemovals, async () => {
+      const chain = await readerDb.questionChains.get(chainId)
+      if (!chain) throw new Error(`Question chain ${chainId} is missing`)
+      const timestamp = now()
+      await readerDb.questionChains.put({ ...chain, status: 'hidden', updated_at: timestamp })
+      await readerDb.pendingRemovals.put({
+        id: `qa-chain:${chainId}`, kind: 'qa-chain', target_id: chainId, root_node_id: rootNodeId,
+        note: '', created_at: timestamp, updated_at: timestamp,
+      })
+    })
+    changed()
+  },
+  undoHiddenQuestionChain: async (chainId: string): Promise<void> => {
+    await readerDb.transaction('rw', readerDb.questionChains, readerDb.pendingRemovals, async () => {
+      const chain = await readerDb.questionChains.get(chainId)
+      if (chain) await readerDb.questionChains.put({ ...chain, status: 'answered', updated_at: now() })
+      await readerDb.pendingRemovals.delete(`qa-chain:${chainId}`)
+    })
+    changed()
+  },
+  hideQaDescendants: async (chainId: string, fromNodeId: string, rootNodeId: string): Promise<void> => {
+    const timestamp = now()
+    await readerDb.pendingRemovals.put({
+      id: `qa-descendants:${chainId}:${fromNodeId}`, kind: 'qa-descendants', target_id: fromNodeId,
+      root_node_id: rootNodeId, note: '', created_at: timestamp, updated_at: timestamp,
+    })
+    changed()
+  },
   saveQuestionDraft: async (value: QuestionDraft): Promise<void> => {
     await readerDb.transaction('rw', readerDb.questionDrafts, async () => {
       if (value.status === 'editing' || value.status === 'awaiting-import') {

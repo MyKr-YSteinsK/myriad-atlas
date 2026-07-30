@@ -6,6 +6,7 @@ import { RoamingPage } from './pages/RoamingPage'
 import { CoursePage, DomainPage, LibraryPage } from './pages/LibraryPages'
 import { RouteDetailPage, RoutesPage } from './pages/RoutePages'
 import { SearchPage } from './pages/SearchPage'
+import { QuestionDetailPage, QuestionsPage } from './pages/QuestionPages'
 import { NodePage } from './pages/NodePage'
 import { AppLayout } from './layout/AppLayout'
 
@@ -46,8 +47,8 @@ export function App() {
       <Route path="/me/completed" element={<PlaceholderPage title={titles.completed} />} />
       <Route path="/me/favorites" element={<PlaceholderPage title={titles.favorites} />} />
       <Route path="/me/unknown" element={<PlaceholderPage title={titles.unknown} />} />
-      <Route path="/me/questions" element={<PlaceholderPage title={titles.questions} />} />
-      <Route path="/me/questions/:chainId" element={<PlaceholderPage title="问题链详情" />} />
+      <Route path="/me/questions" element={<QuestionsPage />} />
+      <Route path="/me/questions/:chainId" element={<QuestionDetailPage />} />
       <Route path="/me/pending-removals" element={<PlaceholderPage title={titles['pending-removals']} />} />
       <Route path="/me/opinions" element={<PlaceholderPage title={titles.opinions} />} />
       <Route path="*" element={<NotFoundPage />} />

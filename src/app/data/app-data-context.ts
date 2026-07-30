@@ -22,3 +22,7 @@ export function useAppData() {
   if (!value) throw new Error('useAppData must be used inside AppDataProvider')
   return value
 }
+
+export function useOptionalAppData() {
+  return useContext(AppDataContext)
+}
