@@ -103,3 +103,6 @@ export interface RuntimeQaIndex {
   }>
 }
 export interface SearchStatus { schema_version: 1; available: false; reason: 'empty-corpus' }
+export interface RuntimeAppChangelog { schema_version: 1; current_version: string; entries: Array<{ version: string; date: string; summary: string }> }
+export interface RuntimeKnowledgeChangelog { schema_version: 1; current_version: string; entries: Array<{ version: string; date: string; summary: string; categories: string[]; added_nodes: string[]; modified_nodes: string[]; deleted_nodes: string[] }> }
+export interface RuntimeContentManifest { schema_version: 1; content_version: string; base_path: '/myriad-atlas/'; files: Array<{ path: string; kind: string; bytes: number; sha256: string }> }

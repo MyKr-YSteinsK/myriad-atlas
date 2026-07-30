@@ -1,10 +1,17 @@
+import { readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { extname, resolve } from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+const appVersion = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }
+
 export default defineConfig({
   base: '/myriad-atlas/',
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion.version),
+    __DATA_FORMAT_VERSION__: '1',
+  },
   plugins: [
     react(),
     {

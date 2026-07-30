@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { RuntimeCatalog, RuntimeQaIndex, RuntimeRoutesIndex, RuntimeTaxonomy } from '../../content/types'
+import type { RuntimeAppChangelog, RuntimeCatalog, RuntimeContentManifest, RuntimeKnowledgeChangelog, RuntimeQaIndex, RuntimeRoutesIndex, RuntimeTaxonomy } from '../../content/types'
 import type { ContentRepository } from '../../lib/content-client'
 import type { ContentClientError } from '../../lib/errors'
 
@@ -8,6 +8,9 @@ export interface AppData {
   taxonomy: RuntimeTaxonomy
   routes: RuntimeRoutesIndex
   qaIndex: RuntimeQaIndex
+  manifest: RuntimeContentManifest
+  appChangelog: RuntimeAppChangelog
+  knowledgeChangelog: RuntimeKnowledgeChangelog
   contentVersion: string
 }
 export type AppDataState =

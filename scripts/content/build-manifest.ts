@@ -18,6 +18,7 @@ export function kindFor(path: string): string {
   if (path.endsWith('routes.json')) return 'routes-index'
   if (path.endsWith('qa-index.json')) return 'qa-index'
   if (path.endsWith('knowledge-changelog.json')) return 'knowledge-changelog'
+  if (path.endsWith('app-changelog.json')) return 'app-changelog'
   if (path.endsWith('search-status.json')) return 'search-status'
   if (path.startsWith('media/')) return 'media'
   return 'generated'

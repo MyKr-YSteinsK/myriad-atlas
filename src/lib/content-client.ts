@@ -1,6 +1,9 @@
 import type {
   CatalogRecord,
   RuntimeCatalog,
+  RuntimeAppChangelog,
+  RuntimeContentManifest,
+  RuntimeKnowledgeChangelog,
   RuntimeNode,
   RuntimeQaIndex,
   RuntimeRoute,
@@ -8,7 +11,8 @@ import type {
   RuntimeTaxonomy,
   SearchStatus,
 } from '../content/types'
-import { basePath } from './base-path'
+import { basePath, PROJECT_BASE_PATH } from './base-path'
+import { APP_VERSION } from './content-version'
 import { ContentClientError } from './errors'
 
 const SUPPORTED_SCHEMA_VERSION = 1
@@ -22,6 +26,21 @@ function hasEnvelope(value: unknown): value is Record<string, unknown> & { schem
 }
 function safeId(value: string): boolean {
   return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)
+}
+function safeManifestPath(value: unknown): value is string {
+  return typeof value === 'string' && /^(?:_generated|media)\/[a-zA-Z0-9._/-]+$/.test(value)
+    && !value.includes('..') && !value.includes('//')
+}
+function validAppLog(value: Record<string, unknown>): boolean {
+  return typeof value.current_version === 'string' && Array.isArray(value.entries)
+    && value.entries.every((entry) => isRecord(entry) && typeof entry.version === 'string'
+      && /^\d{4}-\d{2}-\d{2}$/.test(String(entry.date)) && typeof entry.summary === 'string')
+}
+function validKnowledgeLog(value: Record<string, unknown>): boolean {
+  return typeof value.current_version === 'string' && Array.isArray(value.entries)
+    && value.entries.every((entry) => isRecord(entry) && typeof entry.version === 'string'
+      && /^\d{4}-\d{2}-\d{2}$/.test(String(entry.date)) && typeof entry.summary === 'string'
+      && ['categories', 'added_nodes', 'modified_nodes', 'deleted_nodes'].every((key) => Array.isArray(entry[key]) && entry[key].every((item) => typeof item === 'string')))
 }
 
 export class ContentRepository {
@@ -68,6 +87,16 @@ export class ContentRepository {
     this.cache.set(path, value)
     return value as T
   }
+  private async loadIndependent<T>(path: string, label: string, check: (value: Record<string, unknown>) => boolean, signal?: AbortSignal): Promise<T> {
+    const cached = this.cache.get(path)
+    if (cached) return cached as T
+    const value = await this.fetchJson(path, signal)
+    if (!isRecord(value) || value.schema_version !== SUPPORTED_SCHEMA_VERSION || !check(value)) {
+      throw new ContentClientError('malformed', `${label}结构无效。`)
+    }
+    this.cache.set(path, value)
+    return value as T
+  }
   invalidate(): void {
     this.generation += 1
     this.cache.clear()
@@ -78,15 +107,24 @@ export class ContentRepository {
     taxonomy: RuntimeTaxonomy
     routes: RuntimeRoutesIndex
     qaIndex: RuntimeQaIndex
+    manifest: RuntimeContentManifest
+    appChangelog: RuntimeAppChangelog
+    knowledgeChangelog: RuntimeKnowledgeChangelog
   }> {
     this.invalidate()
-    const [catalog, taxonomy, routes, qaIndex] = await Promise.all([
+    const [catalog, taxonomy, routes, qaIndex, manifest, appChangelog, knowledgeChangelog] = await Promise.all([
       this.loadCatalog(signal),
       this.loadTaxonomy(signal),
       this.loadRoutesIndex(signal),
       this.loadQaIndex(signal),
+      this.loadContentManifest(signal),
+      this.loadAppChangelog(signal),
+      this.loadKnowledgeChangelog(signal),
     ])
-    return { catalog, taxonomy, routes, qaIndex }
+    if (manifest.content_version !== catalog.content_version || knowledgeChangelog.current_version !== catalog.content_version || appChangelog.current_version !== APP_VERSION) {
+      throw new ContentClientError('application', '运行时版本元数据不一致。')
+    }
+    return { catalog, taxonomy, routes, qaIndex, manifest, appChangelog, knowledgeChangelog }
   }
 
   loadCatalog(signal?: AbortSignal): Promise<RuntimeCatalog> {
@@ -121,6 +159,24 @@ export class ContentRepository {
       throw new ContentClientError('malformed', '搜索状态文件结构无效。')
     }
     return value as unknown as SearchStatus
+  }
+  loadContentManifest(signal?: AbortSignal): Promise<RuntimeContentManifest> {
+    return this.load('_generated/content-manifest.json', '内容清单', (value) => value.base_path === PROJECT_BASE_PATH
+      && Array.isArray(value.files) && new Set(value.files.map((file) => isRecord(file) ? file.path : '')).size === value.files.length
+      && value.files.every((file) => isRecord(file) && safeManifestPath(file.path)
+        && typeof file.kind === 'string' && typeof file.bytes === 'number' && Number.isSafeInteger(file.bytes) && file.bytes >= 0
+        && typeof file.sha256 === 'string' && /^[a-f0-9]{64}$/.test(file.sha256)), signal)
+  }
+  loadAppChangelog(signal?: AbortSignal): Promise<RuntimeAppChangelog> {
+    return this.loadIndependent('_generated/app-changelog.json', '应用版本日志', validAppLog, signal)
+  }
+  async loadKnowledgeChangelog(signal?: AbortSignal): Promise<RuntimeKnowledgeChangelog> {
+    const [log, catalog] = await Promise.all([
+      this.loadIndependent<RuntimeKnowledgeChangelog>('_generated/knowledge-changelog.json', '知识版本日志', validKnowledgeLog, signal),
+      this.loadCatalog(signal),
+    ])
+    if (log.current_version !== catalog.content_version) throw new ContentClientError('application', '知识版本日志与目录版本不一致。')
+    return log
   }
   async loadNode(nodeId: string, signal?: AbortSignal): Promise<RuntimeNode> {
     if (!safeId(nodeId)) throw new ContentClientError('missing', '节点 ID 无效。')

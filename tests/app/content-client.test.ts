@@ -8,6 +8,9 @@ const emptyCatalog = { schema_version: 1, content_version: version, nodes: [] }
 const emptyTaxonomy = { schema_version: 1, content_version: version, domains: [] }
 const emptyRoutes = { schema_version: 1, content_version: version, routes: [] }
 const emptyQa = { schema_version: 1, content_version: version, chains: [] }
+const emptyManifest = { schema_version: 1, content_version: version, base_path: '/myriad-atlas/', files: [] }
+const appLog = { schema_version: 1, current_version: '0.1.0', entries: [{ version: '0.1.0', date: '2026-07-30', summary: 'initial' }] }
+const knowledgeLog = { schema_version: 1, current_version: version, entries: [{ version, date: '2026-07-30', summary: 'initial', categories: [], added_nodes: [], modified_nodes: [], deleted_nodes: [] }] }
 
 function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), { status })
@@ -78,6 +81,15 @@ describe('runtime content repositories', () => {
     await expect(fresh).resolves.toMatchObject({ content_version: '2026.07.31-01' })
     await expect(stale).resolves.toMatchObject({ content_version: '2026.07.31-01' })
     expect(fetcher).toHaveBeenCalledTimes(2)
+  })
+  it('rejects unsafe or duplicate manifest paths and validates independent version logs', async () => {
+    await expect(new ContentRepository(vi.fn().mockResolvedValue(json({ ...emptyManifest, files: [{ path: '../secret', kind: 'node', bytes: 0, sha256: 'a'.repeat(64) }] }))).loadContentManifest()).rejects.toMatchObject({ kind: 'malformed' })
+    const repository = new ContentRepository(vi.fn()
+      .mockResolvedValueOnce(json(appLog))
+      .mockResolvedValueOnce(json(knowledgeLog))
+      .mockResolvedValueOnce(json(emptyCatalog)))
+    await expect(repository.loadAppChangelog()).resolves.toMatchObject({ current_version: '0.1.0' })
+    await expect(repository.loadKnowledgeChangelog()).resolves.toMatchObject({ current_version: version })
   })
 })
 

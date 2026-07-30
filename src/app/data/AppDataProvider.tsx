@@ -1,17 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react'
 import { contentRepository, type ContentRepository } from '../../lib/content-client'
+import { APP_VERSION } from '../../lib/content-version'
 import { ContentClientError } from '../../lib/errors'
 import { AppDataContext, type AppDataState } from './app-data-context'
 import { reconcileQuestionChains } from './question-chains'
 
 async function loadAppData(repository: ContentRepository, signal: AbortSignal) {
-  const [catalog, taxonomy, routes, qaIndex] = await Promise.all([
+  const [catalog, taxonomy, routes, qaIndex, manifest, appChangelog, knowledgeChangelog] = await Promise.all([
     repository.loadCatalog(signal),
     repository.loadTaxonomy(signal),
     repository.loadRoutesIndex(signal),
     repository.loadQaIndex(signal),
+    repository.loadContentManifest(signal),
+    repository.loadAppChangelog(signal),
+    repository.loadKnowledgeChangelog(signal),
   ])
-  return { catalog, taxonomy, routes, qaIndex }
+  if (manifest.content_version !== catalog.content_version || appChangelog.current_version !== APP_VERSION || knowledgeChangelog.current_version !== catalog.content_version) {
+    throw new ContentClientError('application', '运行时版本元数据不一致。')
+  }
+  return { catalog, taxonomy, routes, qaIndex, manifest, appChangelog, knowledgeChangelog }
 }
 
 export function AppDataProvider({
@@ -31,11 +38,11 @@ export function AppDataProvider({
     const controller = new AbortController()
     activeController.current = controller
     try {
-      const { catalog, taxonomy, routes, qaIndex } = refreshing
+      const { catalog, taxonomy, routes, qaIndex, manifest, appChangelog, knowledgeChangelog } = refreshing
         ? await repository.reload(controller.signal)
         : await loadAppData(repository, controller.signal)
       if (sequence !== loadSequence.current) return
-      const data = { catalog, taxonomy, routes, qaIndex, contentVersion: catalog.content_version }
+      const data = { catalog, taxonomy, routes, qaIndex, manifest, appChangelog, knowledgeChangelog, contentVersion: catalog.content_version }
       const next = { status: catalog.nodes.length === 0 ? 'empty' as const : 'ready' as const, data }
       stableState.current = next
       setState(next)

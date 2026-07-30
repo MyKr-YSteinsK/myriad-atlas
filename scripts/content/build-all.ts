@@ -11,6 +11,7 @@ import {
   defaultContentWorkspace,
   generatedRoot,
   publicRoot,
+  repoRoot,
   type ContentWorkspace,
 } from './config'
 import { buildSearch } from './build-search'
@@ -97,7 +98,15 @@ export async function buildAllContent(options: ContentBuildOptions = {}): Promis
         core_anchor_count: route.core_anchor_count,
       })),
     })
+    const appLog = parse(await readFile(resolve(workspace.dataRoot, 'changelog/app.yaml'), 'utf8'))
+    const packageJson = JSON.parse(await readFile(resolve(repoRoot, 'package.json'), 'utf8')) as { version?: unknown }
+    if (typeof packageJson.version !== 'string' || appLog?.current_version !== packageJson.version) {
+      throw new Error('package.json version must match app changelog current_version')
+    }
     const knowledgeLog = parse(await readFile(resolve(workspace.dataRoot, 'changelog/knowledge.yaml'), 'utf8'))
+    await assertRuntimeSchema('app-changelog.schema.json', appLog, workspace.schemasRoot)
+    await assertRuntimeSchema('knowledge-changelog.schema.json', knowledgeLog, workspace.schemasRoot)
+    await writeJson(resolve(stagingRoot, 'app-changelog.json'), appLog)
     await writeJson(resolve(stagingRoot, 'knowledge-changelog.json'), knowledgeLog)
     await options.onPoint?.('catalog')
 
