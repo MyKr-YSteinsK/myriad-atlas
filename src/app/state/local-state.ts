@@ -36,6 +36,7 @@ export const localState = {
   getRevision: (): number => revision,
   getNode: (nodeId: string): Promise<NodeState | undefined> => readerDb.nodeStates.get(nodeId),
   listNodeStates: (): Promise<NodeState[]> => readerDb.nodeStates.toArray(),
+  listRoutePositions: (): Promise<RoutePosition[]> => readerDb.routePositions.toArray(),
   toggleCompleted: (nodeId: string): Promise<NodeState> => updateNode(nodeId, (value, timestamp) => {
     value.completed = !value.completed
     value.completed_at = value.completed ? timestamp : null
