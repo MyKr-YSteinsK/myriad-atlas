@@ -1,0 +1,58 @@
+name: Validate and deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run verify
+      - run: npm run content:map:check
+      - name: Check deployment artifact boundary
+        run: |
+          test -f dist/_generated/catalog.json
+          if find dist -type f \( -name '*.md' -o -path '*/tests/*' -o -path '*/schemas/*' \) | grep -q .; then
+            echo 'Source content or test files leaked into dist.'
+            exit 1
+          fi
+          if rg -l 'READER_PREVIEW_ONLY|Plan-01' dist; then
+            echo 'Development-only content leaked into dist.'
+            exit 1
+          fi
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
