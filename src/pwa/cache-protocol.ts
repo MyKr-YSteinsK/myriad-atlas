@@ -16,6 +16,8 @@ export interface ActiveContentPointer {
   manifest_fingerprint: string
   cache_name: string
   activated_at: string
+  /** Kept with the pointer so a failed smoke load can restore the last known-good version. */
+  previous_cache_name?: string | null
 }
 
 export const CONTENT_CACHE_MESSAGES = {
@@ -32,16 +34,29 @@ export function contentCacheName(contentVersion: string, manifestFingerprint: st
   return `${CONTENT_CACHE_PREFIX}${contentVersion}-${manifestFingerprint}`
 }
 
+/**
+ * A repair of an already active manifest needs a second cache identity.  Keeping
+ * the immutable version/fingerprint prefix makes it auditable while preventing
+ * an in-place write to the active cache.
+ */
+export function contentCandidateCacheName(contentVersion: string, manifestFingerprint: string, candidateId: string): string {
+  if (!safeSegment(candidateId)) throw new Error('Invalid content cache candidate identity.')
+  return `${contentCacheName(contentVersion, manifestFingerprint)}-candidate-${candidateId}`
+}
+
 export function isContentCacheName(value: unknown): value is string {
-  return typeof value === 'string' && new RegExp(`^${CONTENT_CACHE_PREFIX}[A-Za-z0-9._-]+-[a-f0-9]{64}$`).test(value)
+  return typeof value === 'string' && new RegExp(`^${CONTENT_CACHE_PREFIX}[A-Za-z0-9._-]+-[a-f0-9]{64}(?:-candidate-[A-Za-z0-9._-]+)?$`).test(value)
 }
 
 export function isActiveContentPointer(value: unknown): value is ActiveContentPointer {
   return typeof value === 'object' && value !== null
     && 'content_version' in value && typeof value.content_version === 'string' && safeSegment(value.content_version)
     && 'manifest_fingerprint' in value && typeof value.manifest_fingerprint === 'string' && /^[a-f0-9]{64}$/.test(value.manifest_fingerprint)
-    && 'cache_name' in value && typeof value.cache_name === 'string' && value.cache_name === contentCacheName(value.content_version, value.manifest_fingerprint)
+    && 'cache_name' in value && typeof value.cache_name === 'string' && isContentCacheName(value.cache_name)
+    && (value.cache_name === contentCacheName(value.content_version, value.manifest_fingerprint)
+      || value.cache_name.startsWith(`${contentCacheName(value.content_version, value.manifest_fingerprint)}-candidate-`))
     && 'activated_at' in value && typeof value.activated_at === 'string' && !Number.isNaN(Date.parse(value.activated_at))
+    && (!('previous_cache_name' in value) || value.previous_cache_name === null || typeof value.previous_cache_name === 'string' && isContentCacheName(value.previous_cache_name))
 }
 
 export function canonicalContentPath(input: string | URL, expectedOrigin?: string): string | undefined {

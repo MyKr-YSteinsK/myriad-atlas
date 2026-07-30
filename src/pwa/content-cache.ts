@@ -32,6 +32,11 @@ export async function restorePreviousPointer(pointer: ActiveContentPointer, cach
   await writeActivePointer(pointer, cacheStorage)
 }
 
+export async function clearActivePointer(cacheStorage: ContentCacheStorage | undefined = typeof caches === 'undefined' ? undefined : caches): Promise<boolean> {
+  const storage = cacheStorageOrThrow(cacheStorage)
+  return (await storage.open(CONTENT_META_CACHE)).delete(ACTIVE_POINTER_URL)
+}
+
 export async function listContentCaches(cacheStorage: ContentCacheStorage | undefined = typeof caches === 'undefined' ? undefined : caches): Promise<string[]> {
   if (!cacheStorage) return []
   return (await cacheStorage.keys()).filter((name) => name.startsWith(CONTENT_CACHE_PREFIX)).sort()

@@ -1,8 +1,8 @@
 import { basePath, PROJECT_BASE_PATH } from '../../lib/base-path'
-import { parseContentVersion } from '../../lib/content-version'
+import { compareContentVersions, parseContentVersion } from '../../lib/content-version'
 import { localState } from '../../app/state/local-state'
 import type { OfflineFile, OfflineJob } from '../../app/state/reader-db'
-import { canonicalContentPath, contentCacheName, type ContentManifestFile, withNetworkBypass } from '../cache-protocol'
+import { canonicalContentPath, contentCacheName, contentCandidateCacheName, type ContentManifestFile, withNetworkBypass } from '../cache-protocol'
 import { readActivePointer, type ContentCacheStorage } from '../content-cache'
 
 const SAFETY_MARGIN_BYTES = 5 * 1024 * 1024
@@ -35,7 +35,7 @@ export interface DownloadDependencies {
   failurePoint?: (point: 'before-fetch' | 'after-fetch' | 'before-cache-put', path: string) => void | Promise<void>
 }
 
-interface ManifestPayload { manifest: DownloadManifest; bytes: ArrayBuffer; fingerprint: string }
+export interface ManifestPayload { manifest: DownloadManifest; bytes: ArrayBuffer; fingerprint: string }
 
 function defaultCacheStorage(): ContentCacheStorage | undefined {
   return typeof caches === 'undefined' ? undefined : caches
@@ -46,7 +46,7 @@ function defaultStorage(): DownloadDependencies['storage'] {
   return { estimate: () => navigator.storage.estimate(), persist: () => navigator.storage.persist() }
 }
 
-function isManifest(value: unknown): value is DownloadManifest {
+export function isDownloadManifest(value: unknown): value is DownloadManifest {
   if (typeof value !== 'object' || value === null || !('schema_version' in value) || value.schema_version !== 1 || !('content_version' in value) || typeof value.content_version !== 'string' || !parseContentVersion(value.content_version)) return false
   if (!('base_path' in value) || value.base_path !== PROJECT_BASE_PATH || !('files' in value) || !Array.isArray(value.files)) return false
   const paths = new Set<string>()
@@ -58,7 +58,7 @@ function isManifest(value: unknown): value is DownloadManifest {
     && !paths.has(file.path) && (paths.add(file.path), true))
 }
 
-async function sha256(bytes: ArrayBuffer): Promise<string> {
+export async function sha256(bytes: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', bytes)
   return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('')
 }
@@ -105,14 +105,18 @@ export class ContentDownloadManager {
     }
   }
 
-  async start(options: { confirmLowSpace?: boolean } = {}): Promise<OfflineJob> {
+  async start(options: { confirmLowSpace?: boolean; reuseActiveFiles?: boolean; forceCandidate?: boolean } = {}): Promise<OfflineJob> {
     const payload = await this.fetchManifest()
     const active = await readActivePointer(this.cacheStorage)
-    if (active && active.content_version === payload.manifest.content_version && active.manifest_fingerprint !== payload.fingerprint) {
+    const comparison = active ? compareContentVersions(active.content_version, payload.manifest.content_version, active.manifest_fingerprint, payload.fingerprint) : undefined
+    if (comparison === 'fingerprint-mismatch') {
       throw new Error('内容版本指纹与当前活动版本冲突。')
     }
+    if (comparison === 'newer') throw new Error('网络内容版本比当前活动版本更旧，已阻止降级。')
     const estimate = await this.estimate(payload.bytes.byteLength, payload.manifest.files)
-    const job = this.newJob(payload, estimate)
+    const candidateId = options.forceCandidate || active?.cache_name === contentCacheName(payload.manifest.content_version, payload.fingerprint) ? this.nonce() : undefined
+    const cacheName = candidateId ? contentCandidateCacheName(payload.manifest.content_version, payload.fingerprint, candidateId) : contentCacheName(payload.manifest.content_version, payload.fingerprint)
+    const job = this.newJob(payload, estimate, cacheName, candidateId)
     await localState.saveOfflineJob(job)
     if (estimate.blocked || estimate.confirmation_required && !options.confirmLowSpace) {
       const message = estimate.blocked ? '可用空间不足，未开始下载。' : '可用空间接近预计下载大小，需要确认。'
@@ -122,7 +126,14 @@ export class ContentDownloadManager {
     }
     await this.cacheManifest(job, payload)
     await this.ensureFiles(job, payload.manifest.files)
+    await this.reconcileCompleteFiles(job, payload.manifest)
+    if (options.reuseActiveFiles && active) await this.copyUnchangedActiveFiles(job, payload.manifest, active.cache_name)
     return this.run(job.job_id, payload.manifest)
+  }
+
+  /** Fetches and strictly validates only the network manifest; it never stages files. */
+  async fetchNetworkManifest(): Promise<ManifestPayload> {
+    return this.fetchManifest()
   }
 
   async pause(jobId: string): Promise<void> {
@@ -144,6 +155,14 @@ export class ContentDownloadManager {
     return this.resume(jobId)
   }
 
+  async verifyJob(jobId: string): Promise<{ job: OfflineJob; manifest: DownloadManifest }> {
+    const job = await localState.getOfflineJob(jobId)
+    if (!job) throw new Error('离线下载任务不存在。')
+    const manifest = await this.readCachedManifest(job)
+    await this.verifyCandidate(job, manifest)
+    return { job, manifest }
+  }
+
   private async fetchManifest(): Promise<ManifestPayload> {
     const url = withNetworkBypass(basePath('_generated/content-manifest.json'), this.nonce())
     const response = await this.fetcher(url)
@@ -151,16 +170,16 @@ export class ContentDownloadManager {
     const bytes = await response.arrayBuffer()
     let value: unknown
     try { value = JSON.parse(new TextDecoder().decode(bytes)) } catch { throw new Error('manifest-malformed') }
-    if (!isManifest(value)) throw new Error('manifest-invalid')
+    if (!isDownloadManifest(value)) throw new Error('manifest-invalid')
     return { manifest: value, bytes, fingerprint: await this.digest(bytes) }
   }
 
-  private newJob(payload: ManifestPayload, estimate: DownloadEstimate): OfflineJob {
+  private newJob(payload: ManifestPayload, estimate: DownloadEstimate, cacheName: string, candidateId?: string): OfflineJob {
     const timestamp = this.now()
     return {
-      job_id: `offline-${payload.manifest.content_version}-${payload.fingerprint.slice(0, 12)}`,
+      job_id: `offline-${payload.manifest.content_version}-${payload.fingerprint.slice(0, 12)}${candidateId ? `-${candidateId}` : ''}`,
       content_version: payload.manifest.content_version, manifest_fingerprint: payload.fingerprint,
-      cache_name: contentCacheName(payload.manifest.content_version, payload.fingerprint), status: 'estimating',
+      cache_name: cacheName, status: 'estimating',
       bytes_total: estimate.download_bytes, bytes_done: 0, files_total: payload.manifest.files.length + 1, files_done: 0,
       current_path: null, error_code: null, error_message: null, created_at: timestamp, updated_at: timestamp,
     }
@@ -179,6 +198,40 @@ export class ContentDownloadManager {
       status: 'pending', attempts: 0, error_message: null, updated_at: this.now(),
     })
     await localState.saveOfflineFiles(next)
+  }
+
+  private async copyUnchangedActiveFiles(job: OfflineJob, manifest: DownloadManifest, activeCacheName: string): Promise<void> {
+    const activeManifestResponse = await (await this.cacheStorage.open(activeCacheName)).match(basePath('_generated/content-manifest.json'))
+    if (!activeManifestResponse) return
+    let activeManifest: DownloadManifest
+    try {
+      const value: unknown = JSON.parse(new TextDecoder().decode(await activeManifestResponse.arrayBuffer()))
+      if (!isDownloadManifest(value)) return
+      activeManifest = value
+    } catch {
+      return
+    }
+    const activeFiles = new Map(activeManifest.files.map((file) => [file.path, file]))
+    const activeCache = await this.cacheStorage.open(activeCacheName)
+    const candidateCache = await this.cacheStorage.open(job.cache_name)
+    for (const file of manifest.files) {
+      const previous = activeFiles.get(file.path)
+      if (!previous || previous.bytes !== file.bytes || previous.sha256 !== file.sha256) continue
+      const response = await activeCache.match(basePath(file.path))
+      if (!response) continue
+      try {
+        const bytes = await response.arrayBuffer()
+        if (bytes.byteLength !== file.bytes || await this.digest(bytes) !== file.sha256) continue
+        await candidateCache.put(basePath(file.path), new Response(bytes, { headers: response.headers }))
+        const record = (await localState.listOfflineFiles(job.job_id)).find((entry) => entry.path === file.path)
+        if (record) await localState.saveOfflineFile({ ...record, status: 'complete', error_message: null, updated_at: this.now() })
+      } catch {
+        // A missing or unreadable active entry is deliberately fetched again in run().
+      }
+    }
+    const files = await localState.listOfflineFiles(job.job_id)
+    const bytesDone = (await this.cachedManifestBytes(job.cache_name)) + files.filter((entry) => entry.status === 'complete').reduce((total, entry) => total + entry.bytes, 0)
+    await localState.saveOfflineJob({ ...job, bytes_done: bytesDone, files_done: files.filter((entry) => entry.status === 'complete').length + 1, updated_at: this.now() })
   }
 
   private async run(jobId: string, manifest: DownloadManifest): Promise<OfflineJob> {
@@ -250,7 +303,7 @@ export class ContentDownloadManager {
     if (await this.digest(bytes) !== job.manifest_fingerprint) throw new Error('候选缓存内容清单指纹不一致。')
     let manifest: unknown
     try { manifest = JSON.parse(new TextDecoder().decode(bytes)) } catch { throw new Error('候选缓存内容清单损坏。') }
-    if (!isManifest(manifest) || manifest.content_version !== job.content_version) throw new Error('候选缓存内容清单无效。')
+    if (!isDownloadManifest(manifest) || manifest.content_version !== job.content_version) throw new Error('候选缓存内容清单无效。')
     return manifest
   }
 
