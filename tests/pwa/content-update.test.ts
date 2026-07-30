@@ -16,6 +16,8 @@ const origin = 'https://example.test'
 class MemoryCacheStorage {
   readonly entries = new Map<string, Map<string, Response>>()
   failPointerPut = false
+  pointerWrites = 0
+  failPointerWriteNumber: number | undefined
   async keys(): Promise<string[]> { return [...this.entries.keys()] }
   async delete(name: string): Promise<boolean> { return this.entries.delete(name) }
   async open(name: string): Promise<Cache> {
@@ -28,7 +30,10 @@ class MemoryCacheStorage {
     return {
       match: async (request: RequestInfo | URL) => values.get(key(request))?.clone(),
       put: async (request: RequestInfo | URL, response: Response) => {
-        if (this.failPointerPut && name === 'myriad-atlas-content-meta-v1') throw new Error('pointer-write-failed')
+        if (name === 'myriad-atlas-content-meta-v1') {
+          this.pointerWrites += 1
+          if (this.failPointerPut || this.failPointerWriteNumber === this.pointerWrites) throw new Error('pointer-write-failed')
+        }
         values.set(key(request), response.clone())
       },
       keys: async () => [...values.keys()].map((path) => new Request(`${origin}${path}`)),
@@ -96,7 +101,7 @@ describe('knowledge activation, update and repair', () => {
     const job = await download.start()
     const { manager, repository, search } = activation(storage, download)
 
-    await expect(manager.activate(job.job_id)).resolves.toMatchObject({ active: true, rolledBack: false })
+    await expect(manager.activate(job.job_id)).resolves.toMatchObject({ active: true, rollback: 'not-needed', worker_notified: true })
     expect(await readActivePointer(storage)).toMatchObject({ cache_name: job.cache_name, previous_cache_name: null })
     expect((await localState.getOfflineJob(job.job_id))?.status).toBe('active')
     expect(repository.invalidate).toHaveBeenCalled()
@@ -109,7 +114,7 @@ describe('knowledge activation, update and repair', () => {
     const pointerDownload = createDownload(pointerStorage, data)
     const pointerJob = await pointerDownload.start()
     pointerStorage.failPointerPut = true
-    await expect(activation(pointerStorage, pointerDownload).manager.activate(pointerJob.job_id)).resolves.toMatchObject({ active: false, rolledBack: false })
+    await expect(activation(pointerStorage, pointerDownload).manager.activate(pointerJob.job_id)).resolves.toMatchObject({ active: false, rollback: 'not-needed', pointer_restored: true })
     expect(await readActivePointer(pointerStorage)).toBeUndefined()
 
     const storage = new MemoryCacheStorage()
@@ -119,12 +124,29 @@ describe('knowledge activation, update and repair', () => {
     const newer = await makeFixture('2026.07.31-01', { '_generated/catalog.json': 'new catalog' })
     const nextDownload = createDownload(storage, newer)
     const candidate = await nextDownload.start()
-    await expect(activation(storage, nextDownload, { notify: async () => { throw new Error('worker-failed') } }).manager.activate(candidate.job_id)).resolves.toMatchObject({ active: false, rolledBack: true })
+    await expect(activation(storage, nextDownload, { notify: async () => { throw new Error('worker-failed') } }).manager.activate(candidate.job_id)).resolves.toMatchObject({ active: false, rollback: 'succeeded', pointer_restored: true, worker_notified: false })
     expect((await readActivePointer(storage))?.cache_name).toBe(active.cache_name)
 
     const smokeCandidate = await createDownload(storage, newer).start()
-    await expect(activation(storage, createDownload(storage, newer), { smoke: async () => { throw new Error('smoke-failed') } }).manager.activate(smokeCandidate.job_id)).resolves.toMatchObject({ active: false, rolledBack: true })
+    await expect(activation(storage, createDownload(storage, newer), { smoke: async () => { throw new Error('smoke-failed') } }).manager.activate(smokeCandidate.job_id)).resolves.toMatchObject({ active: false, rollback: 'succeeded', old_content_reloaded: false })
     expect((await readActivePointer(storage))?.cache_name).toBe(active.cache_name)
+  })
+
+  it('records rollback-failed when the prior active pointer cannot be restored', async () => {
+    const storage = new MemoryCacheStorage()
+    const v1 = await makeFixture('2026.07.30-01', { '_generated/catalog.json': 'catalog' })
+    const initial = createDownload(storage, v1)
+    const active = await initial.start()
+    await activation(storage, initial).manager.activate(active.job_id)
+    const v2 = await makeFixture('2026.07.31-01', { '_generated/catalog.json': 'new catalog' })
+    const candidateDownload = createDownload(storage, v2)
+    const candidate = await candidateDownload.start()
+    storage.failPointerWriteNumber = storage.pointerWrites + 2
+
+    await expect(activation(storage, candidateDownload, { smoke: async () => { throw new Error('candidate-failed') } }).manager.activate(candidate.job_id)).resolves.toMatchObject({
+      active: false, rollback: 'failed', pointer_restored: false, old_content_reloaded: false,
+    })
+    expect(await localState.getOfflineJob(candidate.job_id)).toMatchObject({ status: 'rollback-failed', error_code: 'rollback-failed' })
   })
 
   it('copies unchanged files, downloads changes, and excludes removed files from an update candidate', async () => {

@@ -101,7 +101,7 @@ describe('local state repository', () => {
     await localState.saveRoutePosition({ route_id: 'route', stage_id: 'stage', module_id: 'module', node_id: 'roaming' })
     await localState.saveOfflineJob({
       job_id: 'job', content_version: 'v', manifest_fingerprint: 'f'.repeat(64), cache_name: 'cache', status: 'estimating',
-      bytes_total: 0, bytes_done: 0, files_total: 0, files_done: 0, current_path: null, error_code: null, error_message: null, created_at: 'now', updated_at: 'now',
+      payload_bytes_total: 0, payload_bytes_done: 0, required_storage_bytes: 0, bytes_total: 0, bytes_done: 0, files_total: 0, files_done: 0, current_path: null, error_code: null, error_message: null, created_at: 'now', updated_at: 'now',
     })
     expect(await localState.getMutationCount()).toBe(1)
     await localState.saveReaderPreferences({ ...defaultReaderPreferences, fontSize: 20 })

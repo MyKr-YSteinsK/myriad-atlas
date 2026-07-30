@@ -6,7 +6,7 @@ import { APP_VERSION } from '../../lib/content-version'
 import { contentRepository } from '../../lib/content-client'
 import { searchRepository } from '../../lib/search-repository'
 import { isIphoneSafari, isStandalone } from '../../pwa/install-detection'
-import { ContentDownloadManager } from '../../pwa/download/content-download'
+import { ContentDownloadManager, LowSpaceConfirmationRequiredError, type DownloadEstimate } from '../../pwa/download/content-download'
 import { ContentActivationManager } from '../../pwa/update/content-activation'
 import { KnowledgeUpdateChecker, type KnowledgeUpdateCheck } from '../../pwa/update/knowledge-update-check'
 import { verifyActiveContent, type ActiveContentVerification } from '../../pwa/update/content-integrity'
@@ -16,7 +16,7 @@ import { listContentCaches, readActivePointer, type ContentCacheStorage } from '
 import { type ActiveContentPointer } from '../../pwa/cache-protocol'
 import { localState } from '../state/local-state'
 import { useAppUpdate } from '../../pwa/app-update-context'
-import { applyPersonalRestore, clearAllPersonalData, exportPersonalBackup, getBackupReminderState, preparePersonalRestore, readPersonalBackupFile, setBackupReminderEnabled, type BackupReminderState, type PreparedRestore } from '../backup/personal-backup'
+import { applyPersonalRestore, clearAllPersonalData, countCurrentPersonalData, exportPersonalBackup, getBackupReminderState, preparePersonalRestore, readPersonalBackupFile, setBackupReminderEnabled, type BackupReminderState, type PreparedRestore } from '../backup/personal-backup'
 
 type Runtime = { storage: ContentCacheStorage; download: ContentDownloadManager; checker: KnowledgeUpdateChecker }
 
@@ -40,7 +40,7 @@ function displayBytes(value: number | undefined): string {
 }
 
 function jobLabel(status: string): string {
-  return ({ estimating: '正在估算空间', downloading: '正在下载', paused: '下载已暂停', failed: '下载失败', verifying: '正在验证', 'ready-to-activate': '已验证，等待激活', activating: '正在激活', active: '已完整离线' } as Record<string, string>)[status] ?? status
+  return ({ estimating: '正在估算空间', downloading: '正在下载', paused: '下载已暂停', failed: '下载失败', 'rollback-failed': '回滚未完成', verifying: '正在验证', 'ready-to-activate': '已验证，等待激活', activating: '正在激活', active: '已完整离线' } as Record<string, string>)[status] ?? status
 }
 
 function activeJob(jobs: ReturnType<typeof useLocalStateSnapshot>['offlineJobs']) {
@@ -80,6 +80,7 @@ export function OfflinePage() {
   const [verification, setVerification] = useState<ActiveContentVerification>()
   const [busy, setBusy] = useState<string>()
   const [error, setError] = useState<string>()
+  const [lowSpace, setLowSpace] = useState<DownloadEstimate>()
   const job = activeJob(local.offlineJobs)
   const refreshPointer = useCallback(async () => {
     if (!runtime) return
@@ -110,8 +111,22 @@ export function OfflinePage() {
       smokeLoad: async () => { if (!await appData.refresh()) throw new Error('新知识版本未通过应用数据加载验证。') },
     })
     const result = await manager.activate(job.job_id)
-    if (!result.active) throw new Error(result.error || '知识更新失败，仍在使用旧版本。')
+    if (!result.active) {
+      const oldVersionVerified = result.rollback === 'succeeded' && result.pointer_restored && result.old_content_reloaded
+      throw new Error(oldVersionVerified ? '知识更新失败，已重新验证旧版本仍可使用。' : result.error || '知识更新失败；请重新验证当前活动知识。')
+    }
   })
+  const startDownload = async (options: { confirmLowSpace?: boolean; reuseActiveFiles?: boolean; forceCandidate?: boolean } = {}): Promise<void> => {
+    if (!runtime) return
+    setBusy('download'); setError(undefined)
+    try {
+      await runtime.download.start(options)
+      setLowSpace(undefined)
+    } catch (reason) {
+      if (reason instanceof LowSpaceConfirmationRequiredError) setLowSpace(reason.estimate)
+      else setError(reason instanceof Error ? reason.message : '操作未完成。')
+    } finally { setBusy(undefined); void refreshPointer() }
+  }
   const currentMode = (() => {
     const standalone = typeof window !== 'undefined' && isStandalone(window.matchMedia?.('(display-mode: standalone)').matches ?? false, (navigator as Navigator & { standalone?: boolean }).standalone === true)
     return standalone ? '主屏幕 Web App' : isIphoneSafari(navigator.userAgent) ? 'iPhone Safari 标签页' : '浏览器标签页'
@@ -119,19 +134,20 @@ export function OfflinePage() {
   return <section className="atlas-page offline-page"><p className="atlas-coordinate">LOCAL / OFFLINE</p><h1 tabIndex={-1}>离线与更新</h1>
     <dl className="offline-overview"><div><dt>运行模式</dt><dd>{currentMode}</dd></div><div><dt>应用外壳</dt><dd>{({ unsupported: '不支持或开发模式', registering: '注册中', ready: '已就绪', 'offline-ready': '离线外壳已就绪', 'update-available': '应用更新可用', activating: '正在更新', error: '注册失败' } as Record<string, string>)[appUpdate.state.status]}</dd></div><div><dt>离线知识</dt><dd>{pointer ? `已激活 ${pointer.content_version}` : '尚未完整下载'}</dd></div></dl>
     {!runtime && <p role="status">此浏览器不支持 Cache Storage，无法提供完整离线知识。</p>}
-    {job && <section className="offline-card"><h2>{jobLabel(job.status)}</h2><p>{job.content_version} · {job.files_done} / {job.files_total} 个文件 · {displayBytes(job.bytes_done)} / {displayBytes(job.bytes_total)}</p>{job.error_message && <details><summary>查看错误详情</summary><p>{job.error_message}</p></details>}</section>}
+    {job && <section className="offline-card"><h2>{jobLabel(job.status)}</h2><p>{job.content_version} · {job.files_done} / {job.files_total} 个文件 · {displayBytes(job.payload_bytes_done)} / {displayBytes(job.payload_bytes_total)}（{job.payload_bytes_total ? Math.min(100, Math.round(job.payload_bytes_done / job.payload_bytes_total * 100)) : 100}%）</p><p>建议预留空间：{displayBytes(Math.max(0, job.required_storage_bytes - job.payload_bytes_total))}</p>{job.error_message && <details><summary>查看错误详情</summary><p>{job.error_message}</p></details>}</section>}
+    {lowSpace && <section className="offline-card"><h2>空间接近下载所需</h2><dl className="offline-overview"><div><dt>预计下载</dt><dd>{displayBytes(lowSpace.payload_bytes_total)}</dd></div><div><dt>建议预留</dt><dd>{displayBytes(lowSpace.required_storage_bytes - lowSpace.payload_bytes_total)}</dd></div><div><dt>浏览器估算可用</dt><dd>{displayBytes(lowSpace.available)}</dd></div></dl><p>可用空间可以容纳内容本身，但不足以保留建议的安全余量；下载可能因浏览器缓存压力失败。</p><div className="offline-actions"><button type="button" disabled={Boolean(busy)} onClick={() => void startDownload({ confirmLowSpace: true })}>仍然开始</button><button type="button" disabled={Boolean(busy)} onClick={() => setLowSpace(undefined)}>取消</button></div></section>}
     {verification && <p role="status">完整性检查：{verification.status}。{verification.message}</p>}
     {check && <p role="status">知识检查：{check.message}</p>}
     {error && <p role="alert">{error}</p>}
     <div className="offline-actions">
-      {!pointer && !job && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('download', async () => { await runtime!.download.start() })}>开始完整下载</button>}
+      {!pointer && (!job || job.error_code === 'confirmation-required') && !lowSpace && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void startDownload()}>开始完整下载</button>}
       {job?.status === 'downloading' && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('pause', () => runtime!.download.pause(job.job_id))}>暂停</button>}
-      {(job?.status === 'paused' || job?.status === 'failed') && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('resume', async () => { await runtime!.download.retry(job.job_id) })}>{job.status === 'paused' ? '继续' : '重试失败'}</button>}
+      {(job?.status === 'paused' || job?.status === 'failed') && job.error_code !== 'confirmation-required' && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('resume', async () => { await runtime!.download.retry(job.job_id) })}>{job.status === 'paused' ? '继续' : '重试失败'}</button>}
       {job?.status === 'ready-to-activate' && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void activate()}>激活已验证版本</button>}
       <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('check', async () => { setCheck(await runtime!.checker.check({ manual: true })) })}>检查知识更新</button>
       {pointer && check?.status === 'update-available' && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('update', async () => { await runtime!.download.start({ reuseActiveFiles: true }) })}>下载更新</button>}
       {pointer && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('redownload', async () => { await runtime!.download.start({ reuseActiveFiles: true, forceCandidate: true }) })}>重新下载知识库</button>}
-      {pointer && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('verify', async () => { setVerification(await verifyActiveContent(runtime!.storage, appData.state.status === 'ready' || appData.state.status === 'empty' ? appData.state.data.contentVersion : undefined)) })}>验证完整性</button>}
+      {pointer && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('verify', async () => { setVerification(await verifyActiveContent(runtime!.storage, appData.state.status === 'ready' || appData.state.status === 'empty' ? appData.state.data.contentVersion : undefined)) })}>重新验证当前活动指针</button>}
       {verification && verification.status !== 'healthy' && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('repair', async () => { const result = await new ContentRepairManager(runtime!.download, runtime!.storage).stageRepair(); if (!result.job || result.job.status !== 'ready-to-activate') throw new Error('无法完成修复候选下载。') })}>下载修复候选</button>}
     </div>
     <p className="offline-note">下载不会在应用关闭后继续。请在主屏幕 Web App 中完成下载和个人状态记录。</p>
@@ -199,9 +215,11 @@ export function BackupPage() {
   const [exporting, setExporting] = useState(false)
   const [prepared, setPrepared] = useState<PreparedRestore>()
   const [restoreReady, setRestoreReady] = useState(false)
+  const [currentPersonalCount, setCurrentPersonalCount] = useState(0)
   const knowledgeVersion = state.status === 'ready' || state.status === 'empty' ? state.data.contentVersion : 'unknown'
   const refresh = useCallback(() => getBackupReminderState(knowledgeVersion).then(setReminder).catch(() => undefined), [knowledgeVersion])
-  useEffect(() => { void refresh() }, [refresh, local.nodeStates, local.questionChains, local.questionDrafts, local.opinions, local.pendingRemovals])
+  useEffect(() => { void refresh() }, [refresh, local.nodeStates, local.routePositions, local.questionChains, local.questionDrafts, local.opinions, local.pendingRemovals])
+  useEffect(() => { void countCurrentPersonalData().then(setCurrentPersonalCount).catch(() => undefined) }, [local.nodeStates, local.routePositions, local.questionChains, local.questionDrafts, local.opinions, local.pendingRemovals])
   const exportBackup = async (): Promise<void> => {
     setExporting(true); setMessage(undefined)
     try {
@@ -220,18 +238,19 @@ export function BackupPage() {
       const tocEntries = await Promise.all(backup.data.node_states.filter((entry) => nodeIds.has(entry.node_id)).map(async (entry) => {
         try { return [entry.node_id, new Set((await contentRepository.loadNode(entry.node_id)).toc.map((item) => item.id))] as const } catch { return [entry.node_id, new Set<string>()] as const }
       }))
-      setPrepared(preparePersonalRestore(backup, { appVersion: APP_VERSION, knowledgeVersion, nodeIds, routeIds: state.data.routes.routes.map((route) => route.id), tocIdsByNode: new Map(tocEntries) }))
+      setPrepared(await preparePersonalRestore(backup, { appVersion: APP_VERSION, knowledgeVersion, nodeIds, routeIds: state.data.routes.routes.map((route) => route.id), tocIdsByNode: new Map(tocEntries), qaIndex: state.data.qaIndex }))
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : '无法读取备份文件。') }
   }
   const restore = async (): Promise<void> => {
     if (!prepared) return
-    if (!restoreReady && (local.nodeStates.length + local.questionChains.length + local.questionDrafts.length + local.pendingRemovals.length + local.opinions.length > 0)) { setMessage('请先成功启动当前数据的备份导出，再执行恢复。'); return }
+    const currentCount = await countCurrentPersonalData()
+    if (!restoreReady && currentCount > 0) { setCurrentPersonalCount(currentCount); setMessage('请先成功启动当前数据的备份导出，再执行恢复。'); return }
     try { await applyPersonalRestore(prepared); setPrepared(undefined); setMessage('个人数据已恢复；离线知识保持不变。'); await refresh() } catch (reason) { setMessage(reason instanceof Error ? `恢复失败：${reason.message}` : '恢复失败，原数据未改变。') }
   }
   return <section className="atlas-page backup-page"><p className="atlas-coordinate">LOCAL / BACKUP</p><h1 tabIndex={-1}>备份与恢复</h1><p>备份只包含个人状态，不包含可重新下载的正文、媒体、搜索索引、Cache Storage 或离线下载记录。</p>
     <dl className="offline-overview"><div><dt>节点状态</dt><dd>{local.nodeStates.length}</dd></div><div><dt>问题链 / 草稿</dt><dd>{local.questionChains.length} / {local.questionDrafts.length}</dd></div><div><dt>待删除 / 意见</dt><dd>{local.pendingRemovals.length} / {local.opinions.length}</dd></div><div><dt>应用 / 知识版本</dt><dd>{APP_VERSION} / {knowledgeVersion}</dd></div></dl>
     <div className="offline-actions"><button type="button" disabled={exporting} onClick={() => void exportBackup()}>{exporting ? '正在准备备份…' : '导出个人备份'}</button><button type="button" onClick={() => void setBackupReminderEnabled(!(reminder?.enabled ?? true)).then(() => void refresh())}>{reminder?.enabled === false ? '启用备份提醒' : '关闭备份提醒'}</button></div>
     {message && <p role="status">{message}</p>}
-    <section className="restore-panel"><h2>恢复个人备份</h2><p>恢复会整套替换当前个人状态；离线知识和下载记录不会变化。</p><label>选择 JSON 备份文件<input type="file" accept="application/json,.json" onChange={(event) => void selectRestoreFile(event.currentTarget.files?.[0])} /></label>{prepared && <><p>备份：应用 {prepared.backup.app_version} · 知识 {prepared.backup.knowledge_version}</p><p>将覆盖 {prepared.summary.replaced} 条记录，导入 {prepared.summary.imported} 条记录，跳过 {Object.values(prepared.summary.skipped).reduce((total, count) => total + count, 0)} 条。</p>{Object.entries(prepared.summary.skipped).map(([reason, count]) => <p key={reason}>{reason}：{count}</p>)}{prepared.summary.warnings.map((warning) => <p key={warning}>{warning}</p>)}<button type="button" disabled={!restoreReady && local.nodeStates.length + local.questionChains.length + local.questionDrafts.length + local.pendingRemovals.length + local.opinions.length > 0} onClick={() => void restore()}>{restoreReady || local.nodeStates.length + local.questionChains.length + local.questionDrafts.length + local.pendingRemovals.length + local.opinions.length === 0 ? '确认整套替换恢复' : '请先导出当前备份'}</button></>}</section>
+    <section className="restore-panel"><h2>恢复个人备份</h2><p>恢复会整套替换当前个人状态；离线知识和下载记录不会变化。</p><label>选择 JSON 备份文件<input type="file" accept="application/json,.json" onChange={(event) => void selectRestoreFile(event.currentTarget.files?.[0])} /></label>{prepared && <><p>备份：应用 {prepared.backup.app_version} · 知识 {prepared.backup.knowledge_version}</p><p>当前将被清除 {prepared.summary.current_clear} 条，备份将导入 {prepared.summary.imported} 条，将跳过 {Object.values(prepared.summary.skipped).reduce((total, count) => total + count, 0)} 条；将保留 {prepared.summary.offline_metadata_retained} 条离线元数据。</p>{Object.entries(prepared.summary.skipped).map(([reason, count]) => <p key={reason}>{reason}：{count}</p>)}{prepared.summary.warnings.map((warning) => <p key={warning}>{warning}</p>)}<button type="button" disabled={!restoreReady && currentPersonalCount > 0} onClick={() => void restore()}>{restoreReady || currentPersonalCount === 0 ? '确认整套替换恢复' : '请先导出当前备份'}</button></>}</section>
   </section>
 }

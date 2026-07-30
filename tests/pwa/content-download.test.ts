@@ -3,7 +3,7 @@ import { readerDb } from '../../src/app/state/reader-db'
 import { localState } from '../../src/app/state/local-state'
 import { basePath } from '../../src/lib/base-path'
 import { contentCacheName } from '../../src/pwa/cache-protocol'
-import { ContentDownloadManager, type DownloadManifest } from '../../src/pwa/download/content-download'
+import { ContentDownloadManager, InsufficientStorageError, LowSpaceConfirmationRequiredError, type DownloadManifest } from '../../src/pwa/download/content-download'
 import { writeActivePointer } from '../../src/pwa/content-cache'
 
 const origin = 'https://example.test'
@@ -82,6 +82,8 @@ describe('complete knowledge download', () => {
 
     expect(job.status).toBe('ready-to-activate')
     expect(job.files_done).toBe(3)
+    expect(job.payload_bytes_done).toBe(job.payload_bytes_total)
+    expect(job.required_storage_bytes).toBeGreaterThan(job.payload_bytes_total)
     const files = await localState.listOfflineFiles(job.job_id)
     expect(files.every((file) => file.status === 'complete')).toBe(true)
     const cache = await storage.open(job.cache_name)
@@ -99,9 +101,32 @@ describe('complete knowledge download', () => {
     expect(failed).toMatchObject({ status: 'failed', error_code: 'bytes-mismatch' })
     expect((await localState.listOfflineFiles(failed.job_id)).find((file) => file.path === '_generated/catalog.json')).toMatchObject({ status: 'failed', attempts: 1 })
 
-    const quota = await manager(new MemoryCacheStorage(), data.manifestText, data.responses, { storage: { estimate: async () => ({ usage: 99, quota: 100 }) } }).start()
-    expect(quota).toMatchObject({ status: 'failed', error_code: 'insufficient-space' })
+    const before = (await localState.listOfflineJobs()).length
+    await expect(manager(new MemoryCacheStorage(), data.manifestText, data.responses, { storage: { estimate: async () => ({ usage: 99, quota: 100 }) } }).start()).rejects.toBeInstanceOf(InsufficientStorageError)
+    expect(await localState.listOfflineJobs()).toHaveLength(before)
     expect(await localState.getAppMeta('offline.active')).toBeUndefined()
+  })
+
+  it('requires confirmation without creating a job, then stages payload progress separately from storage headroom', async () => {
+    const storage = new MemoryCacheStorage()
+    const data = await fixture()
+    const payloadBytes = new TextEncoder().encode(data.manifestText).byteLength + data.manifest.files.reduce((total, file) => total + file.bytes, 0)
+    const download = manager(storage, data.manifestText, data.responses, { storage: { estimate: async () => ({ usage: 0, quota: payloadBytes + 1 }) } })
+
+    await expect(download.start()).rejects.toBeInstanceOf(LowSpaceConfirmationRequiredError)
+    expect(await localState.listOfflineJobs()).toEqual([])
+    const job = await download.start({ confirmLowSpace: true })
+    expect(job).toMatchObject({ status: 'ready-to-activate', payload_bytes_done: payloadBytes, payload_bytes_total: payloadBytes })
+    expect(job.required_storage_bytes).toBeGreaterThan(payloadBytes)
+  })
+
+  it('does not let hard storage insufficiency bypass confirmation', async () => {
+    const storage = new MemoryCacheStorage()
+    const data = await fixture()
+    const payloadBytes = new TextEncoder().encode(data.manifestText).byteLength + data.manifest.files.reduce((total, file) => total + file.bytes, 0)
+    const download = manager(storage, data.manifestText, data.responses, { storage: { estimate: async () => ({ usage: 0, quota: payloadBytes - 1 }) } })
+    await expect(download.start({ confirmLowSpace: true })).rejects.toBeInstanceOf(InsufficientStorageError)
+    expect(await localState.listOfflineJobs()).toEqual([])
   })
 
   it('keeps failed jobs recoverable for hash, HTTP, and Cache Storage quota errors', async () => {

@@ -1,5 +1,5 @@
 import type { Table } from 'dexie'
-import { readerDb, saveReadingProgress, type AppMetaKey, type AppMetaRecord, type LocalQuestionChain, type NodeState, type OfflineFile, type OfflineJob, type Opinion, type PendingRemoval, type QuestionDraft, type ReaderPreferences, type ReaderSettingsRecord, type RoutePosition } from './reader-db'
+import { normalizeOfflineJob, readerDb, saveReadingProgress, type AppMetaKey, type AppMetaRecord, type LocalQuestionChain, type NodeState, type OfflineFile, type OfflineJob, type Opinion, type PendingRemoval, type QuestionDraft, type ReaderPreferences, type ReaderSettingsRecord, type RoutePosition } from './reader-db'
 
 const listeners = new Set<() => void>()
 let revision = 0
@@ -65,8 +65,11 @@ export const localState = {
   listQuestionDrafts: (): Promise<QuestionDraft[]> => readerDb.questionDrafts.toArray(),
   listPendingRemovals: (): Promise<PendingRemoval[]> => readerDb.pendingRemovals.toArray(),
   listOpinions: (): Promise<Opinion[]> => readerDb.opinions.toArray(),
-  listOfflineJobs: (): Promise<OfflineJob[]> => readerDb.offlineJobs.toArray(),
-  getOfflineJob: (jobId: string): Promise<OfflineJob | undefined> => readerDb.offlineJobs.get(jobId),
+  listOfflineJobs: async (): Promise<OfflineJob[]> => (await readerDb.offlineJobs.toArray()).map(normalizeOfflineJob),
+  getOfflineJob: async (jobId: string): Promise<OfflineJob | undefined> => {
+    const job = await readerDb.offlineJobs.get(jobId)
+    return job && normalizeOfflineJob(job)
+  },
   listOfflineFiles: (jobId: string): Promise<OfflineFile[]> => readerDb.offlineFiles.where('job_id').equals(jobId).toArray(),
   getAppMeta: async <T>(key: AppMetaKey): Promise<T | undefined> => (await readerDb.appMeta.get(key))?.value as T | undefined,
   getMutationCount: async (): Promise<number> => {
@@ -117,7 +120,7 @@ export const localState = {
     })
     changed()
   },
-  saveOfflineJob: async (job: OfflineJob): Promise<void> => { await readerDb.offlineJobs.put(job); changed() },
+  saveOfflineJob: async (job: OfflineJob): Promise<void> => { await readerDb.offlineJobs.put(normalizeOfflineJob(job)); changed() },
   saveOfflineFile: async (file: OfflineFile): Promise<void> => { await readerDb.offlineFiles.put(file); changed() },
   saveOfflineFiles: async (files: OfflineFile[]): Promise<void> => { await readerDb.offlineFiles.bulkPut(files); changed() },
   deleteNodeState: async (nodeId: string): Promise<void> => {

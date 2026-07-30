@@ -11,7 +11,7 @@ import {
   saveReadingProgress,
 } from '../../src/app/state/reader-db'
 
-describe('reader IndexedDB v3', () => {
+describe('reader IndexedDB v4', () => {
   beforeEach(async () => {
     await readerDb.delete()
     await readerDb.open()
@@ -59,7 +59,7 @@ describe('reader IndexedDB v3', () => {
     migrated.close()
   })
 
-  it('upgrades v2 personal tables without clearing them and initializes v3 offline metadata', async () => {
+  it('upgrades v2 personal tables without clearing them and initializes v4 offline metadata', async () => {
     const name = `myriad-v2-${Date.now()}`
     const legacy = new Dexie(name)
     legacy.version(1).stores({ settings: '&key', nodeStates: '&node_id, updated_at' })
@@ -75,7 +75,7 @@ describe('reader IndexedDB v3', () => {
 
     const migrated = new MyriadAtlasDatabase(name)
     await migrated.open()
-    expect(DATABASE_VERSION).toBe(3)
+    expect(DATABASE_VERSION).toBe(4)
     expect(await migrated.nodeStates.get('legacy-v2')).toMatchObject({ completed: true, updated_at: 'old' })
     expect(await migrated.pendingRemovals.get('legacy-removal')).not.toHaveProperty('previous_status')
     expect(await migrated.offlineJobs.count()).toBe(0)
@@ -92,7 +92,7 @@ describe('reader IndexedDB v3', () => {
   it('normalizes interrupted downloads without changing completed files', async () => {
     await readerDb.offlineJobs.put({
       job_id: 'job', content_version: '2026.07.30-01', manifest_fingerprint: 'f'.repeat(64), cache_name: 'content-job', status: 'downloading',
-      bytes_total: 10, bytes_done: 5, files_total: 2, files_done: 1, current_path: '_generated/catalog.json', error_code: null, error_message: null, created_at: 'old', updated_at: 'old',
+      payload_bytes_total: 10, payload_bytes_done: 5, required_storage_bytes: 20, bytes_total: 10, bytes_done: 5, files_total: 2, files_done: 1, current_path: '_generated/catalog.json', error_code: null, error_message: null, created_at: 'old', updated_at: 'old',
     })
     await readerDb.offlineFiles.bulkPut([
       { job_id: 'job', path: '_generated/catalog.json', kind: 'catalog', bytes: 5, sha256: 'a'.repeat(64), status: 'downloading', attempts: 1, error_message: null, updated_at: 'old' },
@@ -102,6 +102,26 @@ describe('reader IndexedDB v3', () => {
     expect(await readerDb.offlineJobs.get('job')).toMatchObject({ status: 'paused', error_code: 'interrupted', current_path: null })
     expect(await readerDb.offlineFiles.get(['job', '_generated/catalog.json'])).toMatchObject({ status: 'pending' })
     expect(await readerDb.offlineFiles.get(['job', '_generated/routes.json'])).toMatchObject({ status: 'complete' })
+  })
+
+  it('keeps v3 offline jobs and adds v4 payload fields during the transaction migration', async () => {
+    const name = `myriad-v3-${Date.now()}`
+    const legacy = new Dexie(name)
+    legacy.version(3).stores({
+      settings: '&key', nodeStates: '&node_id, completed, favorite, unknown, uninterested, updated_at', routePositions: '&route_id, updated_at',
+      questionChains: '&chain_id, root_node_id, status, updated_at', questionDrafts: '&draft_id, chain_id, status, updated_at',
+      pendingRemovals: '&id, kind, target_id, updated_at', opinions: '&id, scope, route_id, updated_at',
+      offlineJobs: '&job_id, [content_version+manifest_fingerprint], status, updated_at', offlineFiles: '[job_id+path], job_id, status, updated_at', appMeta: '&key, updated_at',
+    })
+    await legacy.open()
+    await legacy.table('offlineJobs').put({ job_id: 'legacy-job', content_version: '2026.07.30-01', manifest_fingerprint: 'a'.repeat(64), cache_name: 'legacy', status: 'paused', bytes_total: 19, bytes_done: 7, files_total: 2, files_done: 1, current_path: null, error_code: null, error_message: null, created_at: 'old', updated_at: 'old' })
+    legacy.close()
+
+    const migrated = new MyriadAtlasDatabase(name)
+    await migrated.open()
+    expect(await migrated.offlineJobs.get('legacy-job')).toMatchObject({ payload_bytes_total: 19, payload_bytes_done: 7, required_storage_bytes: 19, bytes_total: 19, bytes_done: 7 })
+    migrated.close()
+    await Dexie.delete(name)
   })
 
   it('rolls back an upgrade transaction that throws', async () => {

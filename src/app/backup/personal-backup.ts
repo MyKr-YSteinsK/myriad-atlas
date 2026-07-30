@@ -4,6 +4,7 @@ import { APP_VERSION } from '../../lib/content-version'
 import { compareContentVersions, parseContentVersion } from '../../lib/content-version'
 import { localState, type PersonalStateReplacement } from '../state/local-state'
 import { DATABASE_VERSION, readerDb, type AppMetaRecord, type LocalQuestionChain, type NodeState, type Opinion, type PendingRemoval, type QuestionDraft, type ReaderSettingsRecord, type RoutePosition } from '../state/reader-db'
+import type { RuntimeQaIndex } from '../../content/types'
 
 export const PERSONAL_BACKUP_FORMAT = 'myriad-atlas-personal-backup' as const
 export interface PersonalBackupV1 {
@@ -133,8 +134,17 @@ export async function exportPersonalBackup(knowledgeVersion: string, environment
 }
 
 function backupHasPersonalData(backup: PersonalBackupV1): boolean {
-  const { settings, node_states, route_positions, question_chains, question_drafts, pending_removals, opinions } = backup.data
-  return settings.length + node_states.length + route_positions.length + question_chains.length + question_drafts.length + pending_removals.length + opinions.length > 0
+  const { settings, node_states, route_positions, question_chains, question_drafts, pending_removals, opinions, app_preferences } = backup.data
+  return settings.length + node_states.length + route_positions.length + question_chains.length + question_drafts.length + pending_removals.length + opinions.length + app_preferences.length > 0
+}
+
+export async function countCurrentPersonalData(): Promise<number> {
+  return readerDb.transaction('r', [readerDb.settings, readerDb.nodeStates, readerDb.routePositions, readerDb.questionChains, readerDb.questionDrafts, readerDb.pendingRemovals, readerDb.opinions, readerDb.appMeta], async () => {
+    const preferenceCount = await readerDb.appMeta.where('key').anyOf(['backup.preferences', 'install.guidance']).count()
+    return (await readerDb.settings.count()) + (await readerDb.nodeStates.count()) + (await readerDb.routePositions.count())
+      + (await readerDb.questionChains.count()) + (await readerDb.questionDrafts.count()) + (await readerDb.pendingRemovals.count())
+      + (await readerDb.opinions.count()) + preferenceCount
+  })
 }
 
 export async function getBackupReminderState(knowledgeVersion: string, now = new Date()): Promise<BackupReminderState> {
@@ -158,11 +168,13 @@ export interface RestoreContext {
   nodeIds: Iterable<string>
   routeIds: Iterable<string>
   tocIdsByNode?: ReadonlyMap<string, ReadonlySet<string>>
+  qaIndex: RuntimeQaIndex
 }
 
 export interface RestoreSummary {
-  replaced: number
+  current_clear: number
   imported: number
+  offline_metadata_retained: number
   skipped: Record<string, number>
   warnings: string[]
 }
@@ -197,7 +209,7 @@ function isHigherAppVersion(candidate: string, current: string): boolean {
   return false
 }
 
-export function preparePersonalRestore(backup: PersonalBackupV1, context: RestoreContext): PreparedRestore {
+export async function preparePersonalRestore(backup: PersonalBackupV1, context: RestoreContext): Promise<PreparedRestore> {
   if (!validatePersonalBackup(backup)) throw new Error(backupValidationMessage())
   if (backup.data_format_version > 1) throw new Error('备份数据格式较新，请先更新应用。')
   if (!parseContentVersion(backup.knowledge_version) || !parseContentVersion(context.knowledgeVersion)) throw new Error('备份或当前知识版本无效，不能恢复。')
@@ -221,9 +233,11 @@ export function preparePersonalRestore(backup: PersonalBackupV1, context: Restor
   }
   const duplicateChains = new Set<string>()
   const seenChains = new Set<string>()
+  const reservations = new Map<string, number>()
   for (const chain of backup.data.question_chains) {
     if (seenChains.has(chain.chain_id)) duplicateChains.add(chain.chain_id)
     seenChains.add(chain.chain_id)
+    reservations.set(chain.reserved_first_answer_id, (reservations.get(chain.reserved_first_answer_id) ?? 0) + 1)
   }
   const duplicateDrafts = new Set<string>()
   const seenDrafts = new Set<string>()
@@ -231,19 +245,42 @@ export function preparePersonalRestore(backup: PersonalBackupV1, context: Restor
     if (seenDrafts.has(draft.draft_id)) duplicateDrafts.add(draft.draft_id)
     seenDrafts.add(draft.draft_id)
   }
+  const formalChains = new Map(context.qaIndex.chains.map((chain) => [chain.chain_id, chain]))
+  const formalAnswers = new Map(context.qaIndex.chains.flatMap((chain) => chain.answers.map((answer) => [answer.node_id, { chain_id: chain.chain_id, root_node_id: chain.root_node_id }] as const)))
   const chainsById = new Map(backup.data.question_chains.map((chain) => [chain.chain_id, chain]))
-  const invalidChains = new Set<string>(duplicateChains)
+  const invalidChains = new Set<string>()
+  const invalidReasons = new Map<string, string>()
+  const invalidate = (chainId: string, reason: string): void => {
+    invalidChains.add(chainId)
+    if (!invalidReasons.has(chainId)) invalidReasons.set(chainId, reason)
+  }
+  for (const chain of backup.data.question_chains) {
+    if (duplicateChains.has(chain.chain_id)) invalidate(chain.chain_id, 'duplicate-question-chain')
+    if (!nodeIds.has(chain.root_node_id)) invalidate(chain.chain_id, 'missing-question-root')
+    if (reservations.get(chain.reserved_first_answer_id)! > 1) invalidate(chain.chain_id, 'duplicate-reserved-first-answer-id')
+    if (!/^qa-\d{4}$/.test(chain.chain_id) || chain.chain_id !== chain.reserved_first_answer_id) invalidate(chain.chain_id, 'invalid-question-reservation')
+    const formal = formalChains.get(chain.chain_id)
+    const reservedAnswer = formalAnswers.get(chain.reserved_first_answer_id)
+    if (formal && (formal.root_node_id !== chain.root_node_id || formal.answers[0]?.node_id !== chain.reserved_first_answer_id)) invalidate(chain.chain_id, 'formal-chain-mismatch')
+    if (!formal && reservedAnswer) invalidate(chain.chain_id, reservedAnswer.root_node_id === chain.root_node_id ? 'reserved-id-already-formal' : 'reserved-id-different-root')
+  }
   const pendingPerChain = new Map<string, number>()
   for (const draft of backup.data.question_drafts) {
     const chain = chainsById.get(draft.chain_id)
-    if (!chain || chain.root_node_id !== draft.root_node_id || duplicateDrafts.has(draft.draft_id)) invalidChains.add(draft.chain_id)
+    if (!chain || chain.root_node_id !== draft.root_node_id || duplicateDrafts.has(draft.draft_id)) invalidate(draft.chain_id, 'invalid-question-draft-binding')
     if (draft.status === 'editing' || draft.status === 'awaiting-import') pendingPerChain.set(draft.chain_id, (pendingPerChain.get(draft.chain_id) ?? 0) + 1)
   }
-  for (const [chainId, count] of pendingPerChain) if (count > 1) invalidChains.add(chainId)
+  for (const [chainId, count] of pendingPerChain) if (count > 1) invalidate(chainId, 'multiple-pending-drafts')
+  for (const draft of backup.data.question_drafts) {
+    const chain = chainsById.get(draft.chain_id)
+    if (!chain || draft.parent_node_id === null) continue
+    const formal = formalChains.get(chain.chain_id)
+    const lastAnswer = formal?.answers.at(-1)
+    if (!formal || formal.root_node_id !== chain.root_node_id || lastAnswer?.node_id !== draft.parent_node_id) invalidate(chain.chain_id, 'invalid-question-parent')
+  }
   const questionChains: LocalQuestionChain[] = []
   for (const chain of backup.data.question_chains) {
-    if (!nodeIds.has(chain.root_node_id)) { invalidChains.add(chain.chain_id); increment(skipped, 'missing-question-root'); continue }
-    if (invalidChains.has(chain.chain_id)) { increment(skipped, 'invalid-question-chain'); continue }
+    if (invalidChains.has(chain.chain_id)) { increment(skipped, invalidReasons.get(chain.chain_id) ?? 'invalid-question-chain'); continue }
     questionChains.push(chain)
   }
   const acceptedChainIds = new Set(questionChains.map((chain) => chain.chain_id))
@@ -266,8 +303,16 @@ export function preparePersonalRestore(backup: PersonalBackupV1, context: Restor
     pending_removals: pendingRemovals, opinions: [...backup.data.opinions], app_preferences: [...backup.data.app_preferences],
   }
   const imported = settings.length + nodeStates.length + routePositions.length + questionChains.length + questionDrafts.length + pendingRemovals.length + data.opinions.length + data.app_preferences.length
-  const replaced = backup.data.settings.length + backup.data.node_states.length + backup.data.route_positions.length + backup.data.question_chains.length + backup.data.question_drafts.length + backup.data.pending_removals.length + backup.data.opinions.length + backup.data.app_preferences.length
-  return { backup, data, summary: { replaced, imported, skipped, warnings } }
+  const current = await readerDb.transaction('r', [readerDb.settings, readerDb.nodeStates, readerDb.routePositions, readerDb.questionChains, readerDb.questionDrafts, readerDb.pendingRemovals, readerDb.opinions, readerDb.offlineJobs, readerDb.offlineFiles, readerDb.appMeta], async () => {
+    const appMeta = await readerDb.appMeta.toArray()
+    const currentClear = (await readerDb.settings.count()) + (await readerDb.nodeStates.count()) + (await readerDb.routePositions.count())
+      + (await readerDb.questionChains.count()) + (await readerDb.questionDrafts.count()) + (await readerDb.pendingRemovals.count()) + (await readerDb.opinions.count())
+      + appMeta.filter((entry) => entry.key === 'backup.preferences' || entry.key === 'install.guidance').length
+    const retained = (await readerDb.offlineJobs.count()) + (await readerDb.offlineFiles.count())
+      + appMeta.filter((entry) => entry.key === 'offline.active' || entry.key === 'offline.last-check').length
+    return { currentClear, retained }
+  })
+  return { backup, data, summary: { current_clear: current.currentClear, imported, offline_metadata_retained: current.retained, skipped, warnings } }
 }
 
 export async function applyPersonalRestore(prepared: PreparedRestore): Promise<void> {

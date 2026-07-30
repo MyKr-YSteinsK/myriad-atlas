@@ -11,7 +11,7 @@
     "exported_at": { "$ref": "#/$defs/timestamp" },
     "app_version": { "type": "string", "minLength": 1, "maxLength": 64 },
     "knowledge_version": { "type": "string", "minLength": 1, "maxLength": 64 },
-    "database_version": { "const": 3 },
+    "database_version": { "enum": [3, 4] },
     "data": {
       "type": "object", "additionalProperties": false,
       "required": ["settings", "node_states", "route_positions", "question_chains", "question_drafts", "pending_removals", "opinions", "app_preferences"],

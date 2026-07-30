@@ -19,7 +19,7 @@ describe('personal backup export', () => {
     await localState.toggleFavorite('node-b')
     await localState.toggleCompleted('node-a')
     await localState.saveRoutePosition({ route_id: 'route-b', stage_id: 'stage', module_id: 'module', node_id: 'node-b' })
-    await readerDb.offlineJobs.put({ job_id: 'offline', content_version: '2026.07.30-01', manifest_fingerprint: 'a'.repeat(64), cache_name: 'cache', status: 'failed', bytes_total: 0, bytes_done: 0, files_total: 0, files_done: 0, current_path: null, error_code: 'test', error_message: 'do not export', created_at: timestamp, updated_at: timestamp })
+    await readerDb.offlineJobs.put({ job_id: 'offline', content_version: '2026.07.30-01', manifest_fingerprint: 'a'.repeat(64), cache_name: 'cache', status: 'failed', payload_bytes_total: 0, payload_bytes_done: 0, required_storage_bytes: 0, bytes_total: 0, bytes_done: 0, files_total: 0, files_done: 0, current_path: null, error_code: 'test', error_message: 'do not export', created_at: timestamp, updated_at: timestamp })
     const backup = await createPersonalBackup('2026.07.30-01', timestamp, '0.1.0')
 
     expect(validatePersonalBackup(backup)).toBe(true)

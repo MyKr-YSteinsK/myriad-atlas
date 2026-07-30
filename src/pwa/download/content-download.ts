@@ -16,13 +16,28 @@ export interface DownloadManifest {
 
 export interface StorageEstimate { usage?: number; quota?: number }
 export interface DownloadEstimate {
-  download_bytes: number
+  payload_bytes_total: number
+  required_storage_bytes: number
   usage?: number
   quota?: number
   available?: number
   persist_result?: boolean
   blocked: boolean
   confirmation_required: boolean
+}
+
+export class LowSpaceConfirmationRequiredError extends Error {
+  constructor(readonly estimate: DownloadEstimate) {
+    super('可用空间接近下载所需空间，需要确认。')
+    this.name = 'LowSpaceConfirmationRequiredError'
+  }
+}
+
+export class InsufficientStorageError extends Error {
+  constructor(readonly estimate: DownloadEstimate) {
+    super('可用空间不足，无法开始下载。')
+    this.name = 'InsufficientStorageError'
+  }
 }
 
 export interface DownloadDependencies {
@@ -92,16 +107,17 @@ export class ContentDownloadManager {
   }
 
   async estimate(manifestBytes: number, files: ContentManifestFile[]): Promise<DownloadEstimate> {
-    const download_bytes = manifestBytes + files.reduce((total, file) => total + file.bytes, 0) + Math.max(SAFETY_MARGIN_BYTES, Math.ceil((manifestBytes + files.reduce((total, file) => total + file.bytes, 0)) * 0.1))
+    const payload_bytes_total = manifestBytes + files.reduce((total, file) => total + file.bytes, 0)
+    const required_storage_bytes = payload_bytes_total + Math.max(SAFETY_MARGIN_BYTES, Math.ceil(payload_bytes_total * 0.1))
     const estimate = await this.storage?.estimate?.().catch(() => undefined)
     const persist_result = await this.storage?.persist?.().catch(() => false)
     const usage = estimate?.usage
     const quota = estimate?.quota
     const available = usage !== undefined && quota !== undefined ? Math.max(0, quota - usage) : undefined
     return {
-      download_bytes, usage, quota, available, persist_result,
-      blocked: available !== undefined && available < download_bytes,
-      confirmation_required: available !== undefined && available >= download_bytes && available < download_bytes * 1.2,
+      payload_bytes_total, required_storage_bytes, usage, quota, available, persist_result,
+      blocked: available !== undefined && available < payload_bytes_total,
+      confirmation_required: available !== undefined && available >= payload_bytes_total && available < required_storage_bytes,
     }
   }
 
@@ -114,16 +130,12 @@ export class ContentDownloadManager {
     }
     if (comparison === 'newer') throw new Error('网络内容版本比当前活动版本更旧，已阻止降级。')
     const estimate = await this.estimate(payload.bytes.byteLength, payload.manifest.files)
+    if (estimate.blocked) throw new InsufficientStorageError(estimate)
+    if (estimate.confirmation_required && !options.confirmLowSpace) throw new LowSpaceConfirmationRequiredError(estimate)
     const candidateId = options.forceCandidate || active?.cache_name === contentCacheName(payload.manifest.content_version, payload.fingerprint) ? this.nonce() : undefined
     const cacheName = candidateId ? contentCandidateCacheName(payload.manifest.content_version, payload.fingerprint, candidateId) : contentCacheName(payload.manifest.content_version, payload.fingerprint)
     const job = this.newJob(payload, estimate, cacheName, candidateId)
     await localState.saveOfflineJob(job)
-    if (estimate.blocked || estimate.confirmation_required && !options.confirmLowSpace) {
-      const message = estimate.blocked ? '可用空间不足，未开始下载。' : '可用空间接近预计下载大小，需要确认。'
-      const failed = { ...job, status: 'failed' as const, error_code: estimate.blocked ? 'insufficient-space' : 'confirmation-required', error_message: message, updated_at: this.now() }
-      await localState.saveOfflineJob(failed)
-      return failed
-    }
     await this.cacheManifest(job, payload)
     await this.ensureFiles(job, payload.manifest.files)
     await this.reconcileCompleteFiles(job, payload.manifest)
@@ -180,7 +192,8 @@ export class ContentDownloadManager {
       job_id: `offline-${payload.manifest.content_version}-${payload.fingerprint.slice(0, 12)}${candidateId ? `-${candidateId}` : ''}`,
       content_version: payload.manifest.content_version, manifest_fingerprint: payload.fingerprint,
       cache_name: cacheName, status: 'estimating',
-      bytes_total: estimate.download_bytes, bytes_done: 0, files_total: payload.manifest.files.length + 1, files_done: 0,
+      payload_bytes_total: estimate.payload_bytes_total, payload_bytes_done: 0, required_storage_bytes: estimate.required_storage_bytes,
+      bytes_total: estimate.payload_bytes_total, bytes_done: 0, files_total: payload.manifest.files.length + 1, files_done: 0,
       current_path: null, error_code: null, error_message: null, created_at: timestamp, updated_at: timestamp,
     }
   }
@@ -188,7 +201,7 @@ export class ContentDownloadManager {
   private async cacheManifest(job: OfflineJob, payload: ManifestPayload): Promise<void> {
     const cache = await this.cacheStorage.open(job.cache_name)
     await cache.put(basePath('_generated/content-manifest.json'), new Response(payload.bytes, { headers: { 'Content-Type': 'application/json' } }))
-    await localState.saveOfflineJob({ ...job, bytes_done: payload.bytes.byteLength, files_done: 1, updated_at: this.now() })
+    await localState.saveOfflineJob({ ...job, payload_bytes_done: payload.bytes.byteLength, bytes_done: payload.bytes.byteLength, files_done: 1, updated_at: this.now() })
   }
 
   private async ensureFiles(job: OfflineJob, files: ContentManifestFile[]): Promise<void> {
@@ -231,7 +244,7 @@ export class ContentDownloadManager {
     }
     const files = await localState.listOfflineFiles(job.job_id)
     const bytesDone = (await this.cachedManifestBytes(job.cache_name)) + files.filter((entry) => entry.status === 'complete').reduce((total, entry) => total + entry.bytes, 0)
-    await localState.saveOfflineJob({ ...job, bytes_done: bytesDone, files_done: files.filter((entry) => entry.status === 'complete').length + 1, updated_at: this.now() })
+    await localState.saveOfflineJob({ ...job, payload_bytes_done: bytesDone, bytes_done: bytesDone, files_done: files.filter((entry) => entry.status === 'complete').length + 1, updated_at: this.now() })
   }
 
   private async run(jobId: string, manifest: DownloadManifest): Promise<OfflineJob> {
@@ -251,7 +264,7 @@ export class ContentDownloadManager {
       job = { ...job, status: 'verifying', current_path: null, updated_at: this.now() }
       await localState.saveOfflineJob(job)
       await this.verifyCandidate(job, manifest)
-      job = { ...job, status: 'ready-to-activate', current_path: null, error_code: null, error_message: null, updated_at: this.now() }
+      job = { ...job, status: 'ready-to-activate', payload_bytes_done: job.payload_bytes_total, bytes_done: job.payload_bytes_total, current_path: null, error_code: null, error_message: null, updated_at: this.now() }
       await localState.saveOfflineJob(job)
       return job
     } catch (error) {
@@ -286,7 +299,7 @@ export class ContentDownloadManager {
       await localState.saveOfflineFile({ ...downloading, status: 'complete', error_message: null, updated_at: this.now() })
       const files = await localState.listOfflineFiles(job.job_id)
       const bytesDone = (await this.cachedManifestBytes(job.cache_name)) + files.filter((entry) => entry.status === 'complete').reduce((total, entry) => total + entry.bytes, 0)
-      const next = { ...inFlight, bytes_done: bytesDone, files_done: files.filter((entry) => entry.status === 'complete').length + 1, current_path: null, updated_at: this.now() }
+      const next = { ...inFlight, payload_bytes_done: bytesDone, bytes_done: bytesDone, files_done: files.filter((entry) => entry.status === 'complete').length + 1, current_path: null, updated_at: this.now() }
       await localState.saveOfflineJob(next)
       return next
     } catch (error) {

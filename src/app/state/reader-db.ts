@@ -76,13 +76,19 @@ export interface Opinion {
   created_at: string
   updated_at: string
 }
-export type OfflineJobStatus = 'estimating' | 'downloading' | 'paused' | 'failed' | 'verifying' | 'ready-to-activate' | 'activating' | 'active'
+export type OfflineJobStatus = 'estimating' | 'downloading' | 'paused' | 'failed' | 'verifying' | 'ready-to-activate' | 'activating' | 'active' | 'rollback-failed'
 export interface OfflineJob {
   job_id: string
   content_version: string
   manifest_fingerprint: string
   cache_name: string
   status: OfflineJobStatus
+  /** Actual manifest plus content payload; use these fields for progress. */
+  payload_bytes_total: number
+  payload_bytes_done: number
+  /** Payload plus a separate recommended safety margin for Cache Storage. */
+  required_storage_bytes: number
+  /** @deprecated v3 compatibility fields. They mirror payload byte progress. */
   bytes_total: number
   bytes_done: number
   files_total: number
@@ -107,7 +113,7 @@ export interface OfflineFile {
 export type AppMetaKey = 'offline.active' | 'offline.last-check' | 'backup.preferences' | 'backup.last-success' | 'backup.mutation-count' | 'install.guidance'
 export interface AppMetaRecord { key: AppMetaKey; value: unknown; updated_at: string }
 
-export const DATABASE_VERSION = 3
+export const DATABASE_VERSION = 4
 
 export const defaultReaderPreferences: ReaderPreferences = {
   fontSize: 18, lineHeight: 1.75, paragraphSpacing: 0.85, gutter: 20, contentWidth: 720,
@@ -130,6 +136,26 @@ function normalizeNodeState(value: Partial<NodeState> & { node_id: string }): No
     uninterested_at: value.uninterested_at ?? null,
     reading_progress: value.reading_progress ?? null,
     updated_at: now,
+  }
+}
+
+function validBytes(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : fallback
+}
+
+/** Keeps interrupted v3 jobs readable without discarding their staged cache. */
+export function normalizeOfflineJob(value: OfflineJob): OfflineJob {
+  const legacyTotal = validBytes(value.bytes_total)
+  const payloadTotal = validBytes(value.payload_bytes_total, legacyTotal)
+  const legacyDone = validBytes(value.bytes_done)
+  const payloadDone = Math.min(payloadTotal, validBytes(value.payload_bytes_done, legacyDone))
+  return {
+    ...value,
+    payload_bytes_total: payloadTotal,
+    payload_bytes_done: payloadDone,
+    required_storage_bytes: Math.max(payloadTotal, validBytes(value.required_storage_bytes, payloadTotal)),
+    bytes_total: payloadTotal,
+    bytes_done: payloadDone,
   }
 }
 
@@ -161,7 +187,7 @@ export class MyriadAtlasDatabase extends Dexie {
         Object.assign(record, normalizeNodeState(record))
       })
     })
-    this.version(DATABASE_VERSION).stores({
+    this.version(3).stores({
       settings: '&key',
       nodeStates: '&node_id, completed, favorite, unknown, uninterested, updated_at',
       routePositions: '&route_id, updated_at',
@@ -175,6 +201,22 @@ export class MyriadAtlasDatabase extends Dexie {
     }).upgrade(async (transaction) => {
       await transaction.table<PendingRemoval, string>('pendingRemovals').toCollection().modify((record) => {
         if (record.previous_status && !['draft', 'awaiting-import', 'answered', 'id-conflict'].includes(record.previous_status)) delete record.previous_status
+      })
+    })
+    this.version(DATABASE_VERSION).stores({
+      settings: '&key',
+      nodeStates: '&node_id, completed, favorite, unknown, uninterested, updated_at',
+      routePositions: '&route_id, updated_at',
+      questionChains: '&chain_id, root_node_id, status, updated_at',
+      questionDrafts: '&draft_id, chain_id, status, updated_at',
+      pendingRemovals: '&id, kind, target_id, updated_at',
+      opinions: '&id, scope, route_id, updated_at',
+      offlineJobs: '&job_id, [content_version+manifest_fingerprint], status, updated_at',
+      offlineFiles: '[job_id+path], job_id, status, updated_at',
+      appMeta: '&key, updated_at',
+    }).upgrade(async (transaction) => {
+      await transaction.table<OfflineJob, string>('offlineJobs').toCollection().modify((record) => {
+        Object.assign(record, normalizeOfflineJob(record))
       })
     })
   }
@@ -205,6 +247,7 @@ export async function saveReadingProgress(nodeId: string, ratio: number, anchor:
 export async function normalizeInterruptedOfflineJobs(database = readerDb): Promise<void> {
   const timestamp = new Date().toISOString()
   await database.transaction('rw', database.offlineJobs, database.offlineFiles, async () => {
+    await database.offlineJobs.toCollection().modify((record) => { Object.assign(record, normalizeOfflineJob(record)) })
     await database.offlineJobs.where('status').equals('downloading').modify({
       status: 'paused', error_code: 'interrupted', error_message: '下载在上次关闭时中断。', current_path: null, updated_at: timestamp,
     })
