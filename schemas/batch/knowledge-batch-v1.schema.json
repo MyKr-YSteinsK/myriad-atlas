@@ -21,46 +21,60 @@
     "id": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[A-Za-z0-9._:-]+$" },
     "path": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?:src/content/.+\\.md|src/data/routes/[A-Za-z0-9._-]+\\.ya?ml|public/media/.+\\.(?:png|jpg|jpeg|webp|gif|svg|avif))$" },
     "operationBase": {
-      "type": "object", "additionalProperties": false,
+      "type": "object",
       "required": ["operation_id", "action", "kind", "path", "entity_id"],
       "properties": {
         "operation_id": { "type": "string", "pattern": "^op-\\d{4}(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?$", "maxLength": 128 },
         "action": { "enum": ["add", "replace", "delete"] },
         "kind": { "enum": ["node", "route", "media"] },
         "path": { "$ref": "#/$defs/path" },
-        "entity_id": { "$ref": "#/$defs/id" },
-        "reason": { "type": "string", "minLength": 1, "maxLength": 2000 },
-        "move_from": { "$ref": "#/$defs/path" },
-        "payload_sha256": { "$ref": "#/$defs/hash" },
-        "expected_previous_sha256": { "$ref": "#/$defs/hash" },
-        "delete_mode": { "enum": ["single-node", "roaming-node", "qa-chain", "qa-descendants", "route", "media"] },
-        "chain_id": { "$ref": "#/$defs/id" },
-        "from_node_id": { "$ref": "#/$defs/id" },
-        "expected_descendant_ids": { "type": "array", "minItems": 1, "maxItems": 10000, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } }
+        "entity_id": { "$ref": "#/$defs/id" }
       }
     },
     "add": {
-      "allOf": [
-        { "$ref": "#/$defs/operationBase" },
-        { "type": "object", "properties": { "action": { "const": "add" }, "payload_sha256": { "$ref": "#/$defs/hash" } }, "required": ["payload_sha256"] }
-      ]
+      "allOf": [{ "$ref": "#/$defs/operationBase" }],
+      "type": "object", "additionalProperties": false,
+      "required": ["operation_id", "action", "kind", "path", "entity_id", "payload_sha256"],
+      "properties": {
+        "operation_id": { "type": "string", "pattern": "^op-\\d{4}(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?$", "maxLength": 128 },
+        "action": { "const": "add" }, "kind": { "enum": ["node", "route", "media"] },
+        "path": { "$ref": "#/$defs/path" }, "entity_id": { "$ref": "#/$defs/id" },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "move_from": { "$ref": "#/$defs/path" }, "payload_sha256": { "$ref": "#/$defs/hash" }
+      }
     },
     "replace": {
-      "allOf": [
-        { "$ref": "#/$defs/operationBase" },
-        { "type": "object", "properties": { "action": { "const": "replace" }, "expected_previous_sha256": { "$ref": "#/$defs/hash" }, "payload_sha256": { "$ref": "#/$defs/hash" } }, "required": ["expected_previous_sha256", "payload_sha256"] }
-      ]
+      "allOf": [{ "$ref": "#/$defs/operationBase" }],
+      "type": "object", "additionalProperties": false,
+      "required": ["operation_id", "action", "kind", "path", "entity_id", "expected_previous_sha256", "payload_sha256"],
+      "properties": {
+        "operation_id": { "type": "string", "pattern": "^op-\\d{4}(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?$", "maxLength": 128 },
+        "action": { "const": "replace" }, "kind": { "enum": ["node", "route", "media"] },
+        "path": { "$ref": "#/$defs/path" }, "entity_id": { "$ref": "#/$defs/id" },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "move_from": { "$ref": "#/$defs/path" }, "payload_sha256": { "$ref": "#/$defs/hash" },
+        "expected_previous_sha256": { "$ref": "#/$defs/hash" }
+      }
     },
     "delete": {
       "allOf": [
         { "$ref": "#/$defs/operationBase" },
         {
-          "type": "object", "properties": {
-            "action": { "const": "delete" }, "expected_previous_sha256": { "$ref": "#/$defs/hash" },
-            "delete_mode": { "enum": ["single-node", "roaming-node", "qa-chain", "qa-descendants", "route", "media"] }
+          "type": "object", "additionalProperties": false,
+          "required": ["operation_id", "action", "kind", "path", "entity_id", "expected_previous_sha256", "delete_mode"],
+          "properties": {
+            "operation_id": { "type": "string", "pattern": "^op-\\d{4}(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?$", "maxLength": 128 },
+            "action": { "const": "delete" }, "kind": { "enum": ["node", "route", "media"] },
+            "path": { "$ref": "#/$defs/path" }, "entity_id": { "$ref": "#/$defs/id" },
+            "reason": { "type": "string", "minLength": 1, "maxLength": 2000 },
+            "expected_previous_sha256": { "$ref": "#/$defs/hash" },
+            "delete_mode": { "enum": ["single-node", "roaming-node", "qa-chain", "qa-descendants", "route", "media"] },
+            "chain_id": { "$ref": "#/$defs/id" }, "from_node_id": { "$ref": "#/$defs/id" },
+            "expected_descendant_ids": { "type": "array", "minItems": 1, "maxItems": 10000, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } }
           },
           "required": ["expected_previous_sha256", "delete_mode"],
           "allOf": [
+            { "if": { "type": "object", "properties": { "delete_mode": { "enum": ["single-node", "roaming-node", "qa-chain", "qa-descendants"] } }, "required": ["delete_mode"] }, "then": { "type": "object", "properties": { "kind": { "const": "node" } } } },
             { "if": { "type": "object", "properties": { "delete_mode": { "const": "qa-chain" } }, "required": ["delete_mode"] }, "then": { "type": "object", "properties": { "chain_id": {} }, "required": ["chain_id"] } },
             { "if": { "type": "object", "properties": { "delete_mode": { "const": "qa-descendants" } }, "required": ["delete_mode"] }, "then": { "type": "object", "properties": { "chain_id": {}, "from_node_id": {}, "expected_descendant_ids": {} }, "required": ["chain_id", "from_node_id", "expected_descendant_ids"] } },
             { "if": { "type": "object", "properties": { "delete_mode": { "const": "route" } }, "required": ["delete_mode"] }, "then": { "type": "object", "properties": { "kind": { "const": "route" } } } },
