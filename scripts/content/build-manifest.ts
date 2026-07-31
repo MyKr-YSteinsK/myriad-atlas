@@ -9,6 +9,12 @@ import { writeJson } from './write-json'
 export interface ContentManifestFile { path: string; kind: string; bytes: number; sha256: string }
 export interface ContentManifest { schema_version: 1; content_version: string; base_path: string; files: ContentManifestFile[] }
 
+const excludedPublishNames = new Set(['.gitkeep', '.ds_store', 'thumbs.db', 'desktop.ini'])
+
+export function isPublishedContentFile(root: string, absolutePath: string): boolean {
+  return relativePosix(root, absolutePath).split('/').every((segment) => !segment.startsWith('.') && !excludedPublishNames.has(segment.toLowerCase()))
+}
+
 export function kindFor(path: string): string {
   if (path.startsWith('_generated/nodes/')) return 'node'
   if (path.startsWith('_generated/routes/')) return 'route'
@@ -30,8 +36,8 @@ export async function buildManifest(
   outputRoot = generatedRoot,
   contentMediaRoot = mediaRoot,
 ): Promise<ContentManifest> {
-  const generatedCandidates = (await findFiles(outputRoot, '')).filter((path) => basename(path) !== 'content-manifest.json' && !basename(path).startsWith('.'))
-  const mediaCandidates = await findFiles(contentMediaRoot, '')
+  const generatedCandidates = (await findFiles(outputRoot, '')).filter((path) => basename(path) !== 'content-manifest.json' && isPublishedContentFile(outputRoot, path))
+  const mediaCandidates = (await findFiles(contentMediaRoot, '')).filter((path) => isPublishedContentFile(contentMediaRoot, path))
   const files = await Promise.all([...generatedCandidates, ...mediaCandidates].map(async (absolutePath) => {
     const bytes = await readFile(absolutePath)
     const path = absolutePath.startsWith(outputRoot)

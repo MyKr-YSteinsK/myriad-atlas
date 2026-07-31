@@ -40,7 +40,7 @@ export class KnowledgeUpdateChecker {
     const now = this.now()
     const checked_at = now.toISOString()
     if (!options.manual && isRecent(await localState.getAppMeta('offline.last-check'), now, this.cooldownMs)) {
-      return { status: 'cooldown', checked_at, message: 'A knowledge update check was completed recently.' }
+      return { status: 'cooldown', checked_at, message: '近期已检查过知识更新。' }
     }
     let payload: ManifestPayload
     try {

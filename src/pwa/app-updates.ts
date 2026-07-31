@@ -41,6 +41,10 @@ export interface AppUpdateControllerOptions {
 
 const UPDATE_CONTROL_TIMEOUT_MS = 12_000
 
+function registrationErrorSummary(reason: unknown): string {
+  return reason instanceof Error ? `${reason.name}: ${reason.message}` : 'UnknownError: Service Worker registration failed.'
+}
+
 export function currentRegistrationEnvironment(): RegistrationEnvironment {
   return {
     production: import.meta.env.PROD,
@@ -106,7 +110,9 @@ export class AppUpdateController {
       return
     }
     this.setState({ status: 'registering', lifecycle: 'idle', appVersion: APP_VERSION })
-    const workbox = this.createWorkbox(basePath('sw.js'), { scope: PROJECT_BASE_PATH })
+    const scriptUrl = basePath('sw.js')
+    const scope = PROJECT_BASE_PATH
+    const workbox = this.createWorkbox(scriptUrl, { scope })
     this.workbox = workbox
     workbox.addEventListener('waiting', (event) => { void this.onWaiting(event) })
     workbox.addEventListener('activated', (event) => {
@@ -122,8 +128,9 @@ export class AppUpdateController {
       if (!this.active || this.state.status !== 'registering') return
       this.setState({ status: 'ready', lifecycle: 'idle', appVersion: APP_VERSION })
       if (registration?.waiting) void this.onWaiting({ type: 'waiting', sw: registration.waiting, wasWaitingBeforeRegister: true })
-    }).catch(() => {
-      if (this.active) this.setState({ status: 'error', lifecycle: 'failed', appVersion: APP_VERSION, error: '应用离线外壳注册失败；在线浏览仍可使用。' })
+    }).catch((reason: unknown) => {
+      console.error('Service Worker registration failed.', reason)
+      if (this.active) this.setState({ status: 'error', lifecycle: 'failed', appVersion: APP_VERSION, error: `应用离线外壳注册失败\n脚本：${scriptUrl}\n作用域：${scope}\n错误：${registrationErrorSummary(reason)}` })
     })
   }
 

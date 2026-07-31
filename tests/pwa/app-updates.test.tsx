@@ -11,6 +11,7 @@ class FakeWorkbox implements WorkboxLike {
   readonly activatedListeners: Array<(event: WorkboxLifecycleEvent) => void> = []
   readonly messageSkipWaiting = vi.fn()
   registration: ServiceWorkerRegistration | undefined
+  registrationError: unknown
 
   addEventListener(type: 'waiting' | 'controlling' | 'activated', listener: ((event: WorkboxLifecycleWaitingEvent) => void) | ((event: WorkboxLifecycleEvent) => void)): void {
     if (type === 'waiting') this.waitingListeners.push(listener as (event: WorkboxLifecycleWaitingEvent) => void)
@@ -18,7 +19,10 @@ class FakeWorkbox implements WorkboxLike {
     if (type === 'activated') this.activatedListeners.push(listener as (event: WorkboxLifecycleEvent) => void)
   }
 
-  async register(): Promise<ServiceWorkerRegistration | undefined> { return this.registration }
+  async register(): Promise<ServiceWorkerRegistration | undefined> {
+    if (this.registrationError !== undefined) throw this.registrationError
+    return this.registration
+  }
   waiting(event: WorkboxLifecycleWaitingEvent): void { this.waitingListeners.forEach((listener) => listener(event)) }
   controlling(): void { this.controllingListeners.forEach((listener) => listener({ type: 'controlling' })) }
 }
@@ -101,6 +105,23 @@ describe('application updates', () => {
     workbox.waiting({ type: 'waiting', sw: {} as ServiceWorker, isExternal: true })
     await Promise.resolve()
     expect(controller.getState()).toMatchObject({ status: 'update-available', isExternal: true })
+  })
+
+  it('retains safe Service Worker registration diagnostics while logging the original reason', async () => {
+    const workbox = new FakeWorkbox()
+    const reason = new Error('scope denied')
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    workbox.registrationError = reason
+    const controller = new AppUpdateController({ environment: productionEnvironment, createWorkbox: () => workbox })
+
+    controller.start()
+
+    await waitFor(() => expect(controller.getState()).toMatchObject({
+      status: 'error',
+      error: '应用离线外壳注册失败\n脚本：/myriad-atlas/sw.js\n作用域：/myriad-atlas/\n错误：Error: scope denied',
+    }))
+    expect(consoleError).toHaveBeenCalledWith('Service Worker registration failed.', reason)
+    consoleError.mockRestore()
   })
 })
 

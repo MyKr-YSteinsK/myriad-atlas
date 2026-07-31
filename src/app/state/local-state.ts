@@ -123,6 +123,13 @@ export const localState = {
   saveOfflineJob: async (job: OfflineJob): Promise<void> => { await readerDb.offlineJobs.put(normalizeOfflineJob(job)); changed() },
   saveOfflineFile: async (file: OfflineFile): Promise<void> => { await readerDb.offlineFiles.put(file); changed() },
   saveOfflineFiles: async (files: OfflineFile[]): Promise<void> => { await readerDb.offlineFiles.bulkPut(files); changed() },
+  deleteOfflineJob: async (jobId: string): Promise<void> => {
+    await readerDb.transaction('rw', [readerDb.offlineJobs, readerDb.offlineFiles], async () => {
+      await readerDb.offlineFiles.where('job_id').equals(jobId).delete()
+      await readerDb.offlineJobs.delete(jobId)
+    })
+    changed()
+  },
   deleteNodeState: async (nodeId: string): Promise<void> => {
     await mutatePersonalState([readerDb.nodeStates], () => readerDb.nodeStates.delete(nodeId))
   },

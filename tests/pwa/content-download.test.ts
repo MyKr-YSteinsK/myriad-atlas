@@ -4,7 +4,7 @@ import { localState } from '../../src/app/state/local-state'
 import { basePath } from '../../src/lib/base-path'
 import { contentCacheName } from '../../src/pwa/cache-protocol'
 import { ContentDownloadManager, InsufficientStorageError, LowSpaceConfirmationRequiredError, type DownloadManifest } from '../../src/pwa/download/content-download'
-import { writeActivePointer } from '../../src/pwa/content-cache'
+import { readActivePointer, writeActivePointer } from '../../src/pwa/content-cache'
 
 const origin = 'https://example.test'
 
@@ -99,6 +99,7 @@ describe('complete knowledge download', () => {
     wrongBytes.set(basePath('_generated/catalog.json'), new Response('short'))
     const failed = await manager(storage, data.manifestText, wrongBytes).start()
     expect(failed).toMatchObject({ status: 'failed', error_code: 'bytes-mismatch' })
+    expect(failed.error_message).toContain('文件 _generated/catalog.json 下载失败；错误代码：bytes-mismatch；预期 bytes：16；实际 bytes：5')
     expect((await localState.listOfflineFiles(failed.job_id)).find((file) => file.path === '_generated/catalog.json')).toMatchObject({ status: 'failed', attempts: 1 })
 
     const before = (await localState.listOfflineJobs()).length
@@ -134,16 +135,42 @@ describe('complete knowledge download', () => {
     const hashManifest = { ...data.manifest, files: [{ ...data.manifest.files[0], sha256: 'c'.repeat(64) }, data.manifest.files[1]] }
     const hashFailure = await manager(new MemoryCacheStorage(), JSON.stringify(hashManifest), data.responses).start()
     expect(hashFailure).toMatchObject({ status: 'failed', error_code: 'hash-mismatch' })
+    expect(hashFailure.error_message).toContain('预期 SHA-256：cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc')
+    expect(hashFailure.error_message).toContain('实际 SHA-256：')
 
     const missing = new Map(data.responses)
     missing.delete(basePath('_generated/catalog.json'))
     const httpFailure = await manager(new MemoryCacheStorage(), data.manifestText, missing).start()
     expect(httpFailure).toMatchObject({ status: 'failed', error_code: 'http-404' })
+    expect(httpFailure.error_message).toContain('文件 _generated/catalog.json 下载失败；HTTP 状态：404；预期 bytes：16；实际 bytes：7')
 
     const quotaFailure = await manager(new MemoryCacheStorage(), data.manifestText, data.responses, {
       failurePoint: (point) => { if (point === 'before-cache-put') throw new DOMException('quota', 'QuotaExceededError') },
     }).start()
     expect(quotaFailure).toMatchObject({ status: 'failed', error_code: 'quota-exceeded' })
+  })
+
+  it('abandons a failed candidate without changing the active cache or personal state', async () => {
+    const storage = new MemoryCacheStorage()
+    const activeFingerprint = 'a'.repeat(64)
+    const active = { schema_version: 1 as const, content_version: '2026.07.29-01', manifest_fingerprint: activeFingerprint, cache_name: contentCacheName('2026.07.29-01', activeFingerprint), activated_at: '2026-07-29T00:00:00.000Z' }
+    await storage.open(active.cache_name)
+    await writeActivePointer(active, storage)
+    await localState.toggleCompleted('node-a')
+    const data = await fixture()
+    const missing = new Map(data.responses)
+    missing.delete(basePath('_generated/catalog.json'))
+    const download = manager(storage, data.manifestText, missing)
+    const failed = await download.start()
+
+    await download.abandon(failed.job_id)
+
+    expect(await localState.getOfflineJob(failed.job_id)).toBeUndefined()
+    expect(await localState.listOfflineFiles(failed.job_id)).toEqual([])
+    expect(await storage.keys()).toEqual(expect.arrayContaining([active.cache_name]))
+    expect(await storage.keys()).not.toContain(failed.cache_name)
+    expect(await readActivePointer(storage)).toMatchObject(active)
+    expect(await localState.getNode('node-a')).toMatchObject({ completed: true })
   })
 
   it('pauses an in-flight request and resumes by skipping complete cache entries', async () => {

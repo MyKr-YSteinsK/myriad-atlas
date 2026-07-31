@@ -3,7 +3,7 @@ import { compareContentVersions, parseContentVersion } from '../../lib/content-v
 import { localState } from '../../app/state/local-state'
 import type { OfflineFile, OfflineJob } from '../../app/state/reader-db'
 import { canonicalContentPath, contentCacheName, contentCandidateCacheName, type ContentManifestFile, withNetworkBypass } from '../cache-protocol'
-import { readActivePointer, type ContentCacheStorage } from '../content-cache'
+import { deleteCandidateCache, readActivePointer, type ContentCacheStorage } from '../content-cache'
 
 const SAFETY_MARGIN_BYTES = 5 * 1024 * 1024
 
@@ -78,10 +78,33 @@ export async function sha256(bytes: ArrayBuffer): Promise<string> {
   return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('')
 }
 
+class FileDownloadError extends Error {
+  constructor(readonly code: string, message: string) {
+    super(message)
+    this.name = 'FileDownloadError'
+  }
+}
+
 function errorCode(error: unknown): string {
+  if (error instanceof FileDownloadError) return error.code
   if (error instanceof DOMException && error.name === 'QuotaExceededError') return 'quota-exceeded'
   if (error instanceof DOMException && error.name === 'AbortError') return 'aborted'
   return error instanceof Error ? error.message : 'download-failed'
+}
+
+function fileDownloadError(file: ContentManifestFile, code: string, actualBytes: number | '未取得', options: { httpStatus?: number; actualSha256?: string } = {}): FileDownloadError {
+  const details = [
+    `文件 ${file.path} 下载失败`,
+    options.httpStatus === undefined ? `错误代码：${code}` : `HTTP 状态：${options.httpStatus}`,
+    `预期 bytes：${file.bytes}`,
+    `实际 bytes：${actualBytes}`,
+  ]
+  if (options.actualSha256 !== undefined) details.push(`预期 SHA-256：${file.sha256}`, `实际 SHA-256：${options.actualSha256}`)
+  return new FileDownloadError(code, details.join('；'))
+}
+
+function asFileDownloadError(file: ContentManifestFile, error: unknown): FileDownloadError {
+  return error instanceof FileDownloadError ? error : fileDownloadError(file, errorCode(error), '未取得')
 }
 
 export class ContentDownloadManager {
@@ -165,6 +188,14 @@ export class ContentDownloadManager {
 
   async retry(jobId: string): Promise<OfflineJob> {
     return this.resume(jobId)
+  }
+
+  async abandon(jobId: string): Promise<void> {
+    const job = await localState.getOfflineJob(jobId)
+    if (!job || (job.status !== 'failed' && job.status !== 'paused')) throw new Error('只能放弃未激活的失败或已暂停下载任务。')
+    await localState.deleteOfflineJob(jobId)
+    const deleted = await deleteCandidateCache(job.cache_name, [], this.cacheStorage)
+    if (!deleted && (await this.cacheStorage.keys()).includes(job.cache_name)) throw new Error('候选知识缓存未能删除。')
   }
 
   async verifyJob(jobId: string): Promise<{ job: OfflineJob; manifest: DownloadManifest }> {
@@ -290,10 +321,14 @@ export class ContentDownloadManager {
       await this.failurePoint('before-fetch', file.path)
       response = await this.fetcher(withNetworkBypass(basePath(file.path), this.nonce()), { signal })
       await this.failurePoint('after-fetch', file.path)
-      if (!response.ok || response.type === 'opaque') throw new Error(`http-${response.status}`)
+      if (!response.ok || response.type === 'opaque') {
+        const actualBytes = response.type === 'opaque' ? '未取得' : await response.arrayBuffer().then((value) => value.byteLength).catch(() => '未取得' as const)
+        throw fileDownloadError(file, response.type === 'opaque' ? 'opaque-response' : `http-${response.status}`, actualBytes, { httpStatus: response.type === 'opaque' ? undefined : response.status })
+      }
       const bytes = await response.arrayBuffer()
-      if (bytes.byteLength !== file.bytes) throw new Error('bytes-mismatch')
-      if (await this.digest(bytes) !== file.sha256) throw new Error('hash-mismatch')
+      if (bytes.byteLength !== file.bytes) throw fileDownloadError(file, 'bytes-mismatch', bytes.byteLength)
+      const actualSha256 = await this.digest(bytes)
+      if (actualSha256 !== file.sha256) throw fileDownloadError(file, 'hash-mismatch', bytes.byteLength, { actualSha256 })
       await this.failurePoint('before-cache-put', file.path)
       await (await this.cacheStorage.open(job.cache_name)).put(basePath(file.path), new Response(bytes, { status: response.status, headers: response.headers }))
       await localState.saveOfflineFile({ ...downloading, status: 'complete', error_message: null, updated_at: this.now() })
@@ -304,8 +339,9 @@ export class ContentDownloadManager {
       return next
     } catch (error) {
       const status = signal.aborted ? 'pending' : 'failed'
-      await localState.saveOfflineFile({ ...downloading, status, error_message: signal.aborted ? '下载已暂停。' : errorCode(error), updated_at: this.now() })
-      throw error
+      const failure = signal.aborted ? undefined : asFileDownloadError(file, error)
+      await localState.saveOfflineFile({ ...downloading, status, error_message: signal.aborted ? '下载已暂停。' : failure!.message, updated_at: this.now() })
+      throw failure ?? error
     }
   }
 

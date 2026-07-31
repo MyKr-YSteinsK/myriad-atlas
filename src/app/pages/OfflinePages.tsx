@@ -143,6 +143,7 @@ export function OfflinePage() {
       {!pointer && (!job || job.error_code === 'confirmation-required') && !lowSpace && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void startDownload()}>开始完整下载</button>}
       {job?.status === 'downloading' && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('pause', () => runtime!.download.pause(job.job_id))}>暂停</button>}
       {(job?.status === 'paused' || job?.status === 'failed') && job.error_code !== 'confirmation-required' && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('resume', async () => { await runtime!.download.retry(job.job_id) })}>{job.status === 'paused' ? '继续' : '重试失败'}</button>}
+      {(job?.status === 'paused' || job?.status === 'failed') && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('abandon', () => runtime!.download.abandon(job.job_id))}>放弃此次下载</button>}
       {job?.status === 'ready-to-activate' && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void activate()}>激活已验证版本</button>}
       <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('check', async () => { setCheck(await runtime!.checker.check({ manual: true })) })}>检查知识更新</button>
       {pointer && check?.status === 'update-available' && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('update', async () => { await runtime!.download.start({ reuseActiveFiles: true }) })}>下载更新</button>}
