@@ -3,6 +3,8 @@ import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { buildAllContent } from '../../scripts/content/build-all'
+import { createContentWorkspace } from '../../scripts/content/config'
 import { dryRunKnowledgeUpdate, readImportedBatchIndex } from '../../scripts/knowledge/dry-run'
 
 function hash(value: Buffer): string { return createHash('sha256').update(value).digest('hex') }
@@ -22,8 +24,9 @@ function storedZip(entries: Array<{ name: string; data: Buffer }>): Buffer {
 
 async function fixtureRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'myriad-dry-run-'))
-  for (const directory of ['src', 'schemas', 'generated', 'public/_generated'] as const) await cp(resolve(process.cwd(), directory), resolve(root, directory), { recursive: true })
+  for (const directory of ['src', 'schemas', 'generated'] as const) await cp(resolve(process.cwd(), directory), resolve(root, directory), { recursive: true })
   await mkdir(resolve(root, 'public/media'), { recursive: true })
+  await buildAllContent({ workspace: createContentWorkspace(root, resolve(root, 'schemas')), targetRoot: resolve(root, 'public/_generated'), publicDirectory: resolve(root, 'public') })
   await mkdir(resolve(root, 'inbox/batches'), { recursive: true })
   await writeFile(resolve(root, 'generated/imported-batches.json'), '{"schema_version":1,"batches":[]}\n')
   return root

@@ -6,6 +6,7 @@ import { localState } from '../../src/app/state/local-state'
 import { backupFileName, backupJson, createPersonalBackup, exportPersonalBackup, getBackupReminderState, startBackupExport, validatePersonalBackup } from '../../src/app/backup/personal-backup'
 
 const timestamp = '2026-07-30T12:34:56.000Z'
+const localBackupTime = new Date(2026, 6, 30, 20, 34, 56)
 
 describe('personal backup export', () => {
   beforeEach(async () => {
@@ -39,7 +40,8 @@ describe('personal backup export', () => {
 
     const triggerDownload = vi.fn()
     const revokeObjectURL = vi.fn()
-    await expect(startBackupExport(backup, { createObjectURL: () => 'blob:test', revokeObjectURL, triggerDownload })).resolves.toBe('downloaded')
+    const localBackup = await createPersonalBackup('2026.07.30-01', localBackupTime.toISOString())
+    await expect(startBackupExport(localBackup, { createObjectURL: () => 'blob:test', revokeObjectURL, triggerDownload })).resolves.toBe('downloaded')
     expect(triggerDownload).toHaveBeenCalledWith('blob:test', 'myriad-atlas-backup-2026-07-30-203456.json')
 
     await expect(startBackupExport(backup, { share: async () => { throw new DOMException('cancelled', 'AbortError') }, canShare: () => true, createFile: (parts, name, options) => new File(parts, name, options) })).rejects.toThrow('cancelled')
@@ -58,6 +60,6 @@ describe('personal backup export', () => {
     expect(await getBackupReminderState('2026.07.30-01', new Date(timestamp))).toMatchObject({ due: false, mutationCount: 0 })
     for (let index = 0; index < 50; index += 1) await localState.toggleFavorite(`node-${index}`)
     expect(await getBackupReminderState('2026.07.30-01', new Date(timestamp))).toMatchObject({ due: true, mutationCount: 50 })
-    expect(backupFileName(new Date(timestamp))).toBe('myriad-atlas-backup-2026-07-30-203456.json')
+    expect(backupFileName(localBackupTime)).toBe('myriad-atlas-backup-2026-07-30-203456.json')
   })
 })
