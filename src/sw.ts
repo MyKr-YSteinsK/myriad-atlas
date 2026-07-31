@@ -1,4 +1,4 @@
-import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching'
+import { cleanupOutdatedCaches, matchPrecache, precacheAndRoute } from 'workbox-precaching'
 import { registerRoute } from 'workbox-routing'
 import { getAppVersionResponse, isGetAppVersionMessage } from './pwa/service-worker-messages'
 import { CONTENT_CACHE_MESSAGES } from './pwa/cache-protocol'
@@ -16,14 +16,23 @@ const contentHandler = new VersionedContentHandler(self.location.origin, caches,
 precacheAndRoute((self as unknown as ServiceWorkerRuntime).__WB_MANIFEST)
 cleanupOutdatedCaches()
 
-const navigationHandler = createHandlerBoundToURL('index.html')
-
 registerRoute(
   ({ request, url }) => request.mode === 'navigate'
     && url.pathname.startsWith(scopePath)
     && !url.pathname.startsWith(`${scopePath}_generated/`)
     && !url.pathname.startsWith(`${scopePath}media/`),
-  navigationHandler,
+  async ({ request }) => {
+    const cached = await matchPrecache('index.html') ?? await matchPrecache(`${scopePath}index.html`)
+    if (cached) return cached
+    try {
+      return await fetch(request)
+    } catch {
+      return new Response('Application shell is unavailable.', {
+        status: 503,
+        headers: { 'Content-Type': 'text/plain;charset=utf-8', 'X-Myriad-Offline': 'app-shell-missing' },
+      })
+    }
+  },
 )
 
 registerRoute(

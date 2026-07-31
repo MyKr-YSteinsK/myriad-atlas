@@ -1,6 +1,9 @@
 schema_version: 1
-current_version: 0.3.0
+current_version: 0.3.1
 entries:
+  - version: 0.3.1
+    date: 2026-08-01
+    summary: 修复应用离线外壳注册异常，并改进完整离线知识下载与错误诊断。
   - version: 0.3.0
     date: 2026-07-31
     summary: 增加安全知识批次导入、物理删除、知识地图和 Windows 发布门禁，并完善 PWA 更新与恢复语义。

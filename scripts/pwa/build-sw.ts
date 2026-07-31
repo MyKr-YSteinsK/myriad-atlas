@@ -20,6 +20,7 @@ async function main(): Promise<void> {
     await build({
       configFile: resolve(repositoryRoot, 'vite.config.ts'),
       publicDir: false,
+      define: { 'process.env.NODE_ENV': JSON.stringify('production') },
       build: {
         outDir: temporaryDirectory,
         emptyOutDir: true,
@@ -52,7 +53,13 @@ async function main(): Promise<void> {
       swDest: resolve(distDirectory, 'sw.js'),
     })
     const serviceWorker = await readFile(resolve(distDirectory, 'sw.js'), 'utf8')
+    if (!serviceWorker.trim()) throw new Error('Service Worker output is empty.')
     if (serviceWorker.includes('self.__WB_MANIFEST')) throw new Error('Service Worker precache manifest was not injected.')
+    if (serviceWorker.includes('process.env.NODE_ENV')) throw new Error('Service Worker contains an unresolved Node environment reference.')
+    if (/createHandlerBoundToURL\((?:'|")index\.html(?:'|")\)/.test(serviceWorker)) throw new Error('Service Worker contains a top-level precache navigation handler.')
+    if (!['index.html', 'manifest.webmanifest'].every((path) => serviceWorker.includes(path)) || !precacheUrls.some((url) => url.startsWith('assets/'))) {
+      throw new Error('Final Service Worker is missing application shell precache entries.')
+    }
   } finally {
     await rm(temporaryDirectory, { recursive: true, force: true })
   }
