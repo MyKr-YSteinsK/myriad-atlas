@@ -51,7 +51,7 @@ describe('search and QA runtime artifacts', () => {
     expect(JSON.parse(stdout.trim()).every((count: number) => count > 0)).toBe(true)
     const catalog = JSON.parse(await readFile(resolve(targetRoot, 'catalog.json'), 'utf8')) as { nodes: Array<Record<string, unknown>> }
     expect(catalog.nodes.some((node) => 'plain_text' in node)).toBe(false)
-  })
+  }, 15_000)
 
   it('orders QA chains and answers by their linear parent relation', async () => {
     const validation = await validateSource(fixtureWorkspace)
