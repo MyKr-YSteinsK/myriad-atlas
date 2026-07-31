@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { parse } from 'yaml'
 import { buildManifest } from './build-manifest'
 import { compileCatalog } from './compile-catalog'
@@ -126,7 +127,9 @@ export async function buildAllContent(options: ContentBuildOptions = {}): Promis
   }
 }
 
-if (process.argv[1] && import.meta.url === `file:///${process.argv[1].replaceAll('\\', '/')}`) {
+const isDirectExecution = Boolean(process.argv[1]) && import.meta.url === pathToFileURL(resolve(process.argv[1])).href
+
+if (isDirectExecution) {
   buildAllContent().then(() => console.log('Built runtime content artifacts.')).catch((error: unknown) => {
     console.error(error)
     process.exitCode = 1

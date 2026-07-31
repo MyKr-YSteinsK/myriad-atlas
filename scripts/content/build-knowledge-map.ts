@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { committedGeneratedRoot } from './config'
 import { contentVersion } from './compile-node'
 import type { SourceRoute, Taxonomy, ValidationResult } from './validate-source'
@@ -57,7 +58,9 @@ export async function buildKnowledgeMap(check = false): Promise<void> {
   await writeFile(outputPath, output, 'utf8')
 }
 
-if (import.meta.url === `file:///${process.argv[1].replaceAll('\\', '/')}`) {
+const isDirectExecution = Boolean(process.argv[1]) && import.meta.url === pathToFileURL(resolve(process.argv[1])).href
+
+if (isDirectExecution) {
   buildKnowledgeMap(process.argv.includes('--check')).catch((error: unknown) => {
     console.error(error)
     process.exitCode = 1

@@ -33,17 +33,29 @@ jobs:
           npm run build
       - name: Check deployment artifact boundary
         run: |
-          test -f dist/_generated/catalog.json
-          test -f dist/_generated/taxonomy.json
-          test -f dist/_generated/routes.json
-          test -f dist/_generated/qa-index.json
-          test -f dist/_generated/content-manifest.json
-          test -f dist/_generated/search-status.json
-          test -f dist/manifest.webmanifest
-          test -f dist/sw.js
-          test -f dist/icons/icon-192.png
-          test -f dist/icons/icon-512.png
-          test -f dist/icons/apple-touch-icon-180.png
+          required_files=(
+            dist/_generated/catalog.json
+            dist/_generated/taxonomy.json
+            dist/_generated/routes.json
+            dist/_generated/qa-index.json
+            dist/_generated/content-manifest.json
+            dist/manifest.webmanifest
+            dist/sw.js
+            dist/icons/icon-192.png
+            dist/icons/icon-512.png
+            dist/icons/apple-touch-icon-180.png
+          )
+          for file in "${required_files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "Missing required deployment artifact: $file"
+              find dist/_generated -maxdepth 3 -type f -print 2>/dev/null || true
+              exit 1
+            fi
+          done
+          if [ ! -f dist/_generated/search-status.json ] && ! find dist/_generated/pagefind -type f -print -quit 2>/dev/null | grep -q .; then
+            echo 'Missing both empty-corpus search status and Pagefind index.'
+            exit 1
+          fi
           if rg -F 'self.__WB_MANIFEST' dist/sw.js; then
             echo 'Service Worker precache manifest was not injected.'
             exit 1

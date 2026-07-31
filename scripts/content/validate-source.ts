@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { basename, relative, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import Ajv2020 from 'ajv/dist/2020.js'
 import type { ValidateFunction } from 'ajv'
 import { parseDocument } from 'yaml'
@@ -409,7 +410,9 @@ function printResult(result: ValidationResult): void {
   if (errors.length > 0) process.exitCode = 1
 }
 
-if (process.argv[1] && import.meta.url === `file:///${process.argv[1].replaceAll('\\', '/')}`) {
+const isDirectExecution = Boolean(process.argv[1]) && import.meta.url === pathToFileURL(resolve(process.argv[1])).href
+
+if (isDirectExecution) {
   validateSource().then(printResult).catch((error: unknown) => {
     console.error(error)
     process.exitCode = 1

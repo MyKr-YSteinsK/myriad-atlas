@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import Ajv2020 from 'ajv/dist/2020.js'
 import { parse } from 'yaml'
 import { defaultContentWorkspace, generatedRoot, type ContentWorkspace } from './config'
@@ -134,7 +135,9 @@ export async function buildNodes(result?: ValidationResult): Promise<RuntimeNode
   return nodes
 }
 
-if (import.meta.url === `file:///${process.argv[1].replaceAll('\\', '/')}`) {
+const isDirectExecution = Boolean(process.argv[1]) && import.meta.url === pathToFileURL(resolve(process.argv[1])).href
+
+if (isDirectExecution) {
   buildNodes().then((nodes) => console.log(`Compiled ${nodes.length} nodes.`)).catch((error: unknown) => {
     console.error(error)
     process.exitCode = 1
