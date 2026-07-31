@@ -9,7 +9,7 @@ export function LibraryPage() {
   const local = useLocalStateSnapshot()
   if (state.status === 'loading') return <section className="atlas-page"><h1 tabIndex={-1}>知识库</h1><p role="status">正在加载……</p></section>
   if (state.status === 'error') return <section className="atlas-page"><h1 tabIndex={-1}>知识库</h1><p role="alert">{state.error.message}</p></section>
-  return <section className="atlas-page library-page"><p className="atlas-coordinate">LIBRARY / TAXONOMY</p><h1 tabIndex={-1}>知识库</h1>
+  return <section className="atlas-page library-page"><p className="atlas-coordinate">LIBRARY / TAXONOMY</p><h1 tabIndex={-1}>知识库</h1><p><Link to="/map">打开知识地图</Link></p>
     {state.data.catalog.nodes.length === 0 && <div className="atlas-empty"><span>00</span><p>当前没有正式节点。已登记领域仍保留在索引中。</p></div>}
     <ol className="domain-index">{state.data.taxonomy.domains.map((domain, index) => <li key={domain.id}><span>{String(index + 1).padStart(2, '0')}</span><div><h2><Link to={`/library/${domain.id}`}>{domain.name}</Link></h2>{domain.id === 'knowledge-roaming' && <p>用于随机发现的知识池。</p>}{domain.id === 'personal-qa' && <p>由个人问题链形成的正式解答库。</p>}<ul>{domain.courses.map((course) => {
       const stats = courseStats(state.data.catalog.nodes, local.nodeStates, course.id)
