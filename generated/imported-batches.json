@@ -1,4 +1,17 @@
 {
   "schema_version": 1,
-  "batches": []
+  "batches": [
+    {
+      "batch_id": "batch-20260801-001-acceptance-sample",
+      "zip_sha256": "48619488b637193708b81e53d0a2a91d28171bbee5a8e51a9b2e3bb3d57682d3",
+      "base_content_version": "2026.07.30-01",
+      "target_content_version": "2026.08.01-01",
+      "released_on": "2026-08-01",
+      "applied_at": "2026-07-31T21:04:00.360Z",
+      "operation_counts": {
+        "add:node": 3,
+        "add:route": 1
+      }
+    }
+  ]
 }

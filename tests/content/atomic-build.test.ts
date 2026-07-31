@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { buildAllContent, type ContentBuildPoint } from '../../scripts/content/build-all'
+import { createContentWorkspace } from '../../scripts/content/config'
 
 const temporaryRoots: string[] = []
 
@@ -52,9 +53,15 @@ describe('atomic generated content builds', () => {
     temporaryRoots.push(root)
     const publicDirectory = resolve(root, 'public')
     const targetRoot = resolve(publicDirectory, '_generated')
-    await buildAllContent({ publicDirectory, targetRoot })
+    await cp(resolve(process.cwd(), 'src/data/taxonomy'), resolve(root, 'src/data/taxonomy'), { recursive: true })
+    await cp(resolve(process.cwd(), 'src/data/changelog'), resolve(root, 'src/data/changelog'), { recursive: true })
+    await cp(resolve(process.cwd(), 'schemas'), resolve(root, 'schemas'), { recursive: true })
+    await mkdir(resolve(root, 'src/content'), { recursive: true })
+    await mkdir(resolve(root, 'src/data/routes'), { recursive: true })
+    await mkdir(resolve(publicDirectory, 'media'), { recursive: true })
+    await buildAllContent({ workspace: createContentWorkspace(root, resolve(root, 'schemas')), publicDirectory, targetRoot })
     const first = await snapshot(targetRoot)
-    await buildAllContent({ publicDirectory, targetRoot })
+    await buildAllContent({ workspace: createContentWorkspace(root, resolve(root, 'schemas')), publicDirectory, targetRoot })
     expect(await snapshot(targetRoot)).toEqual(first)
   })
 })

@@ -1,6 +1,18 @@
 schema_version: 1
-current_version: 2026.07.30-01
+current_version: 2026.08.01-01
 entries:
+  - version: 2026.08.01-01
+    date: 2026-08-01
+    summary: 加入忒修斯之船知识漫游，以及“光与颜色入门”两节点验收路线。
+    categories:
+      - node
+      - route
+    added_nodes:
+      - ship-of-theseus
+      - why-sky-is-blue
+      - why-sunset-is-red
+    modified_nodes: []
+    deleted_nodes: []
   - version: 2026.07.30-01
     date: 2026-07-30
     summary: 初始化知识内容结构与构建契约。

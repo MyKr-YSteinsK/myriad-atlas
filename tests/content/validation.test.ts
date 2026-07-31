@@ -105,11 +105,11 @@ describe('content source contracts', () => {
     await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
   })
 
-  it('accepts the empty formal content library', async () => {
+  it('accepts the formal content library', async () => {
     const result = await validateSource()
 
-    expect(result.nodes).toHaveLength(0)
-    expect(result.routes).toHaveLength(0)
+    expect(result.nodes).toHaveLength(3)
+    expect(result.routes).toHaveLength(1)
     expect(result.issues.filter((entry) => entry.severity === 'error')).toEqual([])
   })
 

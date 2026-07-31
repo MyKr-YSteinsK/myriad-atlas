@@ -1,0 +1,19 @@
+id: light-and-color-intro
+code: LIGHT01
+name: 光与颜色的两步旅行
+summary: 用两个日常现象理解光在大气中的散射，并从白天天空自然过渡到日落颜色。
+stages:
+  - id: atmospheric-light
+    name: 大气中的光
+    summary: 从白天天空进入日落，建立最小而完整的散射解释。
+    modules:
+      - id: scattering-basics
+        name: 散射的两个现象
+        summary: 先理解天空为什么蓝，再理解日落为什么红。
+        units:
+          - node_id: why-sky-is-blue
+            role: core
+            order: 1
+          - node_id: why-sunset-is-red
+            role: core
+            order: 2
