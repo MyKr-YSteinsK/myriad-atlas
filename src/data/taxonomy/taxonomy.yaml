@@ -10,3 +10,8 @@ domains:
     courses:
       - id: question-answer-library
         name: 问题解答库
+  - id: everyday-science
+    name: 日常科学
+    courses:
+      - id: light-and-color-intro
+        name: 光与颜色入门
