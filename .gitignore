@@ -8,4 +8,5 @@ inbox/processed/*
 !inbox/processed/.gitkeep
 inbox/reports/*
 !inbox/reports/.gitkeep
+inbox/authoring/
 *.local

@@ -21,6 +21,8 @@
     "dev:fixture": "npm run content:fixture && vite",
     "content:map": "tsx scripts/content/build-knowledge-map.ts",
     "content:map:check": "tsx scripts/content/build-knowledge-map.ts --check",
+    "content:new": "tsx scripts/authoring/new-content.ts",
+    "batch:create": "tsx scripts/authoring/create-batch.ts",
     "update-knowledge": "tsx scripts/knowledge/update-knowledge.ts",
     "release:prepare": "tsx scripts/release/release-prepare.ts",
     "release:check": "tsx scripts/release/release-check.ts",
