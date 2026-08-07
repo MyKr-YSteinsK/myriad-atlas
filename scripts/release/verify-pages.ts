@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { knowledgeFingerprint } from '../../src/lib/knowledge-fingerprint'
 
-interface ContentManifestFile { path: string; bytes: number; sha256: string }
-interface ContentManifest { files: ContentManifestFile[] }
+interface ContentManifestFile { path: string; kind: string; bytes: number; sha256: string }
+interface ContentManifest { schema_version: 1; content_version: string; base_path: '/myriad-atlas/'; files: ContentManifestFile[] }
 interface FetchedBytes { response: Response; bytes: ArrayBuffer }
 interface FetchBytesOptions {
   fetch?: typeof fetch
@@ -33,11 +34,25 @@ function sha256(bytes: ArrayBuffer): string {
 }
 
 function isContentManifest(value: unknown): value is ContentManifest {
-  return typeof value === 'object' && value !== null && 'files' in value && Array.isArray(value.files)
+  return typeof value === 'object' && value !== null
+    && 'schema_version' in value && value.schema_version === 1
+    && 'content_version' in value && typeof value.content_version === 'string'
+    && 'base_path' in value && value.base_path === '/myriad-atlas/'
+    && 'files' in value && Array.isArray(value.files)
     && value.files.every((file) => typeof file === 'object' && file !== null
       && 'path' in file && typeof file.path === 'string'
+      && 'kind' in file && typeof file.kind === 'string'
       && 'bytes' in file && typeof file.bytes === 'number' && Number.isSafeInteger(file.bytes) && file.bytes >= 0
       && 'sha256' in file && typeof file.sha256 === 'string' && /^[a-f0-9]{64}$/.test(file.sha256))
+}
+
+export async function validatePagesManifest(value: unknown, expectedContentVersion: string): Promise<ContentManifest> {
+  if (!isContentManifest(value)) throw new Error('Content manifest has an invalid file list.')
+  if (value.content_version !== expectedContentVersion) throw new Error('Content manifest version does not match the requested knowledge version.')
+  if (value.files.some((file) => file.path === '_generated/app-changelog.json')) throw new Error('Content manifest must not include the app changelog.')
+  if (value.files.some((file) => file.path.startsWith('.') || file.path.includes('/.'))) throw new Error('Content manifest contains a hidden path.')
+  await knowledgeFingerprint(value)
+  return value
 }
 
 function isJavaScriptMime(value: string | null): boolean {
@@ -87,7 +102,7 @@ export async function fetchBytesNoCache(base: string, path: string, options: Fet
   throw new Error(`Pages fetch failed: ${path}`)
 }
 
-export async function verifyContentFile(base: string, file: ContentManifestFile, options?: FetchBytesOptions): Promise<void> {
+export async function verifyContentFile(base: string, file: Pick<ContentManifestFile, 'path' | 'bytes' | 'sha256'>, options?: FetchBytesOptions): Promise<void> {
   const { bytes } = await fetchBytesNoCache(base, `/${file.path}`, options)
   const actualHash = sha256(bytes)
   if (bytes.byteLength !== file.bytes || actualHash !== file.sha256) throw new Error(`Pages content verification failed: ${file.path}; expected ${file.bytes} bytes / ${file.sha256}, got ${bytes.byteLength} bytes / ${actualHash}`)
@@ -99,11 +114,17 @@ async function main(): Promise<void> {
   const contentVersion = argument('--content-version')
   if (!appVersion || !contentVersion) throw new Error('Both --app-version and --content-version are required.')
 
+  const payloads = new Map<string, string>()
   for (const path of ['/', '/manifest.webmanifest', '/_generated/app-changelog.json', '/_generated/knowledge-changelog.json', '/_generated/catalog.json', '/_generated/knowledge-map.json']) {
     const { bytes } = await fetchBytesNoCache(base, path)
     const text = new TextDecoder().decode(bytes)
-    if ((path.includes('app-changelog') && !text.includes(appVersion)) || (path.includes('knowledge-changelog') && !text.includes(contentVersion))) throw new Error(`Pages version does not match: ${path}`)
+    payloads.set(path, text)
   }
+  const appLog = JSON.parse(payloads.get('/_generated/app-changelog.json') ?? '') as { current_version?: unknown }
+  const knowledgeLog = JSON.parse(payloads.get('/_generated/knowledge-changelog.json') ?? '') as { current_version?: unknown }
+  const catalog = JSON.parse(payloads.get('/_generated/catalog.json') ?? '') as { content_version?: unknown }
+  if (appLog.current_version !== appVersion) throw new Error('Pages app changelog version does not match the requested app version.')
+  if (knowledgeLog.current_version !== contentVersion || catalog.content_version !== contentVersion) throw new Error('Pages knowledge runtime versions do not match the requested knowledge version.')
 
   const serviceWorker = await fetchBytesNoCache(base, '/sw.js')
   const serviceWorkerText = new TextDecoder().decode(serviceWorker.bytes)
@@ -113,10 +134,10 @@ async function main(): Promise<void> {
   const { bytes: manifestBytes } = await fetchBytesNoCache(base, '/_generated/content-manifest.json')
   let manifestValue: unknown
   try { manifestValue = JSON.parse(new TextDecoder().decode(manifestBytes)) } catch { throw new Error('Content manifest is not valid JSON.') }
-  if (!isContentManifest(manifestValue)) throw new Error('Content manifest has an invalid file list.')
-  if (manifestValue.files.some((file) => file.path.startsWith('.') || file.path.includes('/.'))) throw new Error('Content manifest contains a hidden path.')
+  const manifest = await validatePagesManifest(manifestValue, contentVersion)
+  if (manifest.content_version !== catalog.content_version || manifest.content_version !== knowledgeLog.current_version) throw new Error('Pages content manifest, catalog, and knowledge changelog versions are inconsistent.')
 
-  for (const file of manifestValue.files) {
+  for (const file of manifest.files) {
     await verifyContentFile(base, file)
   }
   console.log('Pages release verification passed.')

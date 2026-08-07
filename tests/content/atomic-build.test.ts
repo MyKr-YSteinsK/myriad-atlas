@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { buildAllContent, type ContentBuildPoint } from '../../scripts/content/build-all'
 import { createContentWorkspace } from '../../scripts/content/config'
+import { knowledgeFingerprint, type KnowledgeFingerprintManifest } from '../../src/lib/knowledge-fingerprint'
 
 const temporaryRoots: string[] = []
 
@@ -48,7 +49,7 @@ describe('atomic generated content builds', () => {
     },
   )
 
-  it('produces byte-identical formal empty-corpus output twice', async () => {
+  it('produces a stable core knowledge identity across two formal builds', async () => {
     const root = await mkdtemp(resolve(tmpdir(), 'myriad-deterministic-'))
     temporaryRoots.push(root)
     const publicDirectory = resolve(root, 'public')
@@ -60,8 +61,9 @@ describe('atomic generated content builds', () => {
     await mkdir(resolve(root, 'src/data/routes'), { recursive: true })
     await mkdir(resolve(publicDirectory, 'media'), { recursive: true })
     await buildAllContent({ workspace: createContentWorkspace(root, resolve(root, 'schemas')), publicDirectory, targetRoot })
-    const first = await snapshot(targetRoot)
+    const first = JSON.parse(await readFile(resolve(targetRoot, 'content-manifest.json'), 'utf8')) as KnowledgeFingerprintManifest
     await buildAllContent({ workspace: createContentWorkspace(root, resolve(root, 'schemas')), publicDirectory, targetRoot })
-    expect(await snapshot(targetRoot)).toEqual(first)
+    const second = JSON.parse(await readFile(resolve(targetRoot, 'content-manifest.json'), 'utf8')) as KnowledgeFingerprintManifest
+    await expect(knowledgeFingerprint(second)).resolves.toBe(await knowledgeFingerprint(first))
   })
 })

@@ -22,9 +22,13 @@ const KNOWLEDGE_KINDS = new Set([
   'media',
 ])
 
+export function isKnowledgeSemanticFile(file: Pick<KnowledgeFingerprintFile, 'kind'>): boolean {
+  return KNOWLEDGE_KINDS.has(file.kind)
+}
+
 export function canonicalKnowledgeFingerprint(manifest: KnowledgeFingerprintManifest): string {
   const files = manifest.files
-    .filter((file) => KNOWLEDGE_KINDS.has(file.kind))
+    .filter(isKnowledgeSemanticFile)
     .slice()
     .sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0)
   return `${manifest.content_version}\n${files.map((file) => `${file.path}\t${file.kind}\t${file.bytes}\t${file.sha256}`).join('\n')}\n`

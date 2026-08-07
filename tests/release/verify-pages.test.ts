@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fetchBytesNoCache, verifyContentFile } from '../../scripts/release/verify-pages'
+import { fetchBytesNoCache, validatePagesManifest, verifyContentFile } from '../../scripts/release/verify-pages'
 
 function socketFailure(): TypeError {
   const cause = Object.assign(new Error('other side closed'), { code: 'UND_ERR_SOCKET' })
@@ -41,5 +41,18 @@ describe('Pages release verification fetches', () => {
       sha256: '0'.repeat(64),
     }, { fetch: fetcher })).rejects.toThrow('Pages content verification failed: _generated/file.json')
     expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
+  it('requires the online knowledge manifest to exclude app metadata and retain a valid core identity', async () => {
+    const manifest = {
+      schema_version: 1,
+      content_version: '2026.08.01-01',
+      base_path: '/myriad-atlas/' as const,
+      files: [{ path: '_generated/catalog.json', kind: 'catalog', bytes: 1, sha256: 'a'.repeat(64) }],
+    }
+
+    await expect(validatePagesManifest(manifest, manifest.content_version)).resolves.toEqual(manifest)
+    await expect(validatePagesManifest({ ...manifest, files: [...manifest.files, { path: '_generated/app-changelog.json', kind: 'app-changelog', bytes: 1, sha256: 'b'.repeat(64) }] }, manifest.content_version))
+      .rejects.toThrow('must not include the app changelog')
   })
 })

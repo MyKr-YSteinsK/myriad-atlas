@@ -12,6 +12,7 @@ async function runNpm(args: string[]): Promise<void> {
 async function main(): Promise<void> {
   const status = await exec('git', ['status', '--porcelain'], { cwd: process.cwd() }); if (status.stdout.trim()) throw new Error('release:prepare 要求干净工作区')
   await runNpm(['run', 'verify'])
+  await runNpm(['run', 'content:reproducibility'])
   await runNpm(['run', 'release:check'])
   console.log('发布准备完成；未执行 Git 写操作。')
 }
