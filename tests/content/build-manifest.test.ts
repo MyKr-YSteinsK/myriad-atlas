@@ -11,12 +11,14 @@ describe('content manifest publishing filter', () => {
     const mediaRoot = resolve(root, 'media')
     await mkdir(outputRoot, { recursive: true })
     await mkdir(mediaRoot, { recursive: true })
+    await writeFile(resolve(outputRoot, 'app-changelog.json'), '{"current_version":"0.4.0"}')
     await writeFile(resolve(mediaRoot, '.gitkeep'), '')
     await writeFile(resolve(mediaRoot, 'cover.png'), 'media')
 
     const manifest = await buildManifest('2026.07.30-01', outputRoot, mediaRoot)
 
     expect(manifest.files.map((file) => file.path)).not.toContain('media/.gitkeep')
+    expect(manifest.files.map((file) => file.path)).not.toContain('_generated/app-changelog.json')
     expect(manifest.files).toContainEqual(expect.objectContaining({ path: 'media/cover.png', kind: 'media' }))
     await rm(root, { recursive: true, force: true })
   })

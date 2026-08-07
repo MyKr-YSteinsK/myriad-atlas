@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
-import { basename, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { generatedRoot, mediaRoot, PROJECT_BASE_PATH } from './config'
 import { findFiles, relativePosix } from './paths'
 import { assertRuntimeSchema } from './runtime-validation'
@@ -36,7 +36,10 @@ export async function buildManifest(
   outputRoot = generatedRoot,
   contentMediaRoot = mediaRoot,
 ): Promise<ContentManifest> {
-  const generatedCandidates = (await findFiles(outputRoot, '')).filter((path) => basename(path) !== 'content-manifest.json' && isPublishedContentFile(outputRoot, path))
+  const generatedCandidates = (await findFiles(outputRoot, '')).filter((path) => {
+    const relativePath = relativePosix(outputRoot, path)
+    return relativePath !== 'content-manifest.json' && relativePath !== 'app-changelog.json' && isPublishedContentFile(outputRoot, path)
+  })
   const mediaCandidates = (await findFiles(contentMediaRoot, '')).filter((path) => isPublishedContentFile(contentMediaRoot, path))
   const files = await Promise.all([...generatedCandidates, ...mediaCandidates].map(async (absolutePath) => {
     const bytes = await readFile(absolutePath)

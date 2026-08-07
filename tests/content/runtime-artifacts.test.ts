@@ -18,6 +18,7 @@ describe('runtime content artifacts', () => {
     await expect(readFile(resolve(root, 'search-status.json'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
     expect(await readdir(resolve(root, 'pagefind'))).toContain('pagefind.js')
     expect(manifest.files.map((file) => file.path)).not.toContain('_generated/content-manifest.json')
+    expect(manifest.files.map((file) => file.path)).not.toContain('_generated/app-changelog.json')
     expect(manifest.files).toContainEqual(expect.objectContaining({ path: '_generated/qa-index.json', kind: 'qa-index' }))
   })
 

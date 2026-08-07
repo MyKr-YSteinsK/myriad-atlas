@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ContentRepository } from '../../src/lib/content-client'
+import { APP_VERSION } from '../../src/lib/content-version'
 import { ContentClientError } from '../../src/lib/errors'
 import { SearchRepository, toSearchExcerpt } from '../../src/lib/search-repository'
+import { loadAppData } from '../../src/app/data/app-data-loader'
 
 const version = '2026.07.30-01'
 const emptyCatalog = { schema_version: 1, content_version: version, nodes: [] }
@@ -97,6 +99,30 @@ describe('runtime content repositories', () => {
       .mockResolvedValueOnce(json(emptyCatalog)))
     await expect(repository.loadAppChangelog()).resolves.toMatchObject({ current_version: '0.2.0' })
     await expect(repository.loadKnowledgeChangelog()).resolves.toMatchObject({ current_version: version })
+  })
+
+  it('loads a shell-owned app changelog alongside a legacy knowledge manifest', async () => {
+    const legacyManifest = {
+      ...emptyManifest,
+      files: [{ path: '_generated/app-changelog.json', kind: 'app-changelog', bytes: 1, sha256: 'a'.repeat(64) }],
+    }
+    const currentAppLog = { ...appLog, current_version: APP_VERSION, entries: [{ ...appLog.entries[0], version: APP_VERSION }] }
+    const responses = new Map<string, unknown>([
+      ['/myriad-atlas/_generated/catalog.json', emptyCatalog],
+      ['/myriad-atlas/_generated/taxonomy.json', emptyTaxonomy],
+      ['/myriad-atlas/_generated/routes.json', emptyRoutes],
+      ['/myriad-atlas/_generated/qa-index.json', emptyQa],
+      ['/myriad-atlas/_generated/content-manifest.json', legacyManifest],
+      ['/myriad-atlas/_generated/app-changelog.json', currentAppLog],
+      ['/myriad-atlas/_generated/knowledge-changelog.json', knowledgeLog],
+    ])
+    const repository = new ContentRepository(vi.fn((input: RequestInfo | URL) => Promise.resolve(json(responses.get(String(input))))))
+
+    await expect(loadAppData(repository)).resolves.toMatchObject({
+      manifest: legacyManifest,
+      appChangelog: { current_version: APP_VERSION },
+      knowledgeChangelog: { current_version: version },
+    })
   })
 })
 

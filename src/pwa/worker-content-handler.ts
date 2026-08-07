@@ -1,4 +1,4 @@
-import { ACTIVE_POINTER_URL, CONTENT_META_CACHE, canonicalContentPath, hasNetworkBypass, normalizeActiveContentPointer, type ActiveContentPointer } from './cache-protocol'
+import { ACTIVE_POINTER_URL, CONTENT_META_CACHE, canonicalContentPath, hasNetworkBypass, isKnowledgeOwnedRuntimePath, normalizeActiveContentPointer, type ActiveContentPointer } from './cache-protocol'
 
 interface WorkerCacheStorage {
   keys(): Promise<string[]>
@@ -15,7 +15,7 @@ export class VersionedContentHandler {
   ) {}
 
   matches(url: URL): boolean {
-    return canonicalContentPath(url, this.origin) !== undefined
+    return isKnowledgeOwnedRuntimePath(url, this.origin)
   }
 
   resetPointer(): void {
@@ -25,7 +25,7 @@ export class VersionedContentHandler {
   async handle(request: Request): Promise<Response> {
     const url = new URL(request.url)
     const path = canonicalContentPath(url, this.origin)
-    if (!path) return this.fetcher(request)
+    if (!path || !isKnowledgeOwnedRuntimePath(url, this.origin)) return this.fetcher(request)
     if (hasNetworkBypass(url)) {
       try { return await this.fetcher(request) } catch { return this.failure(504, 'network-bypass-failed') }
     }

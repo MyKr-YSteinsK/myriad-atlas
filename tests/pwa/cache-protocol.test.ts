@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ACTIVE_POINTER_URL, CONTENT_CACHE_MESSAGES, CONTENT_META_CACHE, canonicalContentPath, contentCacheName, hasNetworkBypass, withNetworkBypass } from '../../src/pwa/cache-protocol'
+import { ACTIVE_POINTER_URL, CONTENT_CACHE_MESSAGES, CONTENT_META_CACHE, canonicalContentPath, contentCacheName, hasNetworkBypass, isKnowledgeOwnedRuntimePath, withNetworkBypass } from '../../src/pwa/cache-protocol'
 import { deleteCandidateCache, deleteOrphanCaches, listContentCaches, readActivePointer, writeActivePointer } from '../../src/pwa/content-cache'
 import { VersionedContentHandler } from '../../src/pwa/worker-content-handler'
 
@@ -34,6 +34,7 @@ describe('versioned content cache protocol', () => {
   it('canonicalizes only scoped generated/media paths and preserves Hash-router resource URLs', () => {
     expect(canonicalContentPath(`${origin}/myriad-atlas/_generated/pagefind/pagefind.js?x=1#hash`, origin)).toBe('/myriad-atlas/_generated/pagefind/pagefind.js')
     expect(canonicalContentPath(`${origin}/myriad-atlas/media/figure.png`, origin)).toBe('/myriad-atlas/media/figure.png')
+    expect(isKnowledgeOwnedRuntimePath(`${origin}/myriad-atlas/_generated/app-changelog.json`, origin)).toBe(false)
     expect(canonicalContentPath(`${origin}/myriad-atlas/#/node/example`, origin)).toBeUndefined()
     expect(canonicalContentPath('https://other.test/myriad-atlas/_generated/catalog.json', origin)).toBeUndefined()
     const bypass = withNetworkBypass('/myriad-atlas/_generated/catalog.json', 'download-1')
@@ -95,6 +96,20 @@ describe('versioned content cache protocol', () => {
     expect(missing.status).toBe(503)
     expect(missing.headers.get('X-Myriad-Offline')).toBe('active-cache-miss')
     expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the app changelog in the application shell even for legacy active caches', async () => {
+    const storage = new MemoryCacheStorage()
+    await putPointer(storage)
+    const activeCache = await storage.open(pointer.cache_name)
+    await activeCache.put('/myriad-atlas/_generated/app-changelog.json', new Response('legacy-app-log'))
+    const fetcher = vi.fn(async () => new Response('shell-app-log'))
+    const handler = new VersionedContentHandler(origin, storage, fetcher)
+    const request = new Request(`${origin}/myriad-atlas/_generated/app-changelog.json`)
+
+    expect(handler.matches(new URL(request.url))).toBe(false)
+    await expect((await handler.handle(request)).text()).resolves.toBe('shell-app-log')
+    expect(fetcher).toHaveBeenCalledOnce()
   })
 
   it('supports bypass, media/Pagefind, invalid pointers, and pointer refresh messages', async () => {

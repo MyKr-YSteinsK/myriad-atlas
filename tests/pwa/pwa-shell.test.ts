@@ -48,6 +48,7 @@ describe('PWA shell', () => {
 
   it('keeps runtime knowledge data outside the application precache source', async () => {
     const worker = await readFile(resolve(root, 'src/sw.ts'), 'utf8')
+    const buildScript = await readFile(resolve(root, 'scripts/pwa/build-sw.ts'), 'utf8')
     expect(worker).toContain("const scopePath = '/myriad-atlas/'")
     expect(worker).toContain('precacheAndRoute((self as unknown as ServiceWorkerRuntime).__WB_MANIFEST)')
     expect(worker).toContain('cleanupOutdatedCaches()')
@@ -55,5 +56,8 @@ describe('PWA shell', () => {
     expect(worker).not.toContain('createHandlerBoundToURL')
     expect(worker).toContain('registerServiceWorkerLifecycle(serviceWorker')
     expect(worker).not.toContain('clientsClaim')
+    expect(buildScript).toContain("const appChangelogUrl = '_generated/app-changelog.json'")
+    expect(buildScript).toContain('additionalManifestEntries')
+    expect(buildScript).toContain("globIgnores: ['sw.js', '.sw-build/**', '_generated/**', 'media/**', '**/*.map']")
   })
 })

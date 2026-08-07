@@ -91,6 +91,12 @@ export function canonicalContentPath(input: string | URL, expectedOrigin?: strin
   return url.pathname
 }
 
+/** App release metadata is precached with the shell, never in a knowledge snapshot. */
+export function isKnowledgeOwnedRuntimePath(input: string | URL, expectedOrigin?: string): boolean {
+  const path = canonicalContentPath(input, expectedOrigin)
+  return path !== undefined && path !== `${PROJECT_BASE_PATH}_generated/app-changelog.json`
+}
+
 export function hasNetworkBypass(input: string | URL): boolean {
   const url = input instanceof URL ? input : new URL(input, 'https://myriad-atlas.invalid')
   return url.searchParams.has(NETWORK_BYPASS_PARAMETER)
