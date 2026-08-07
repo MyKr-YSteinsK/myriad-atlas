@@ -48,6 +48,22 @@ function activeJob(jobs: ReturnType<typeof useLocalStateSnapshot>['offlineJobs']
     ?? [...jobs].sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0]
 }
 
+export function updateSummary(check: KnowledgeUpdateCheck | undefined): string {
+  if (!check) return '尚未检查'
+  if (check.status === 'up-to-date') return '已是最新'
+  if (check.status === 'update-available') return '发现新知识版本'
+  if (check.status === 'cooldown') return '近期已检查'
+  if (check.status === 'first-download-available') return '可下载完整知识库'
+  return '暂时无法确认更新'
+}
+
+export function shellSummary(status: ReturnType<typeof useAppUpdate>['state']): string {
+  if (status.status === 'error') return '离线外壳注册失败'
+  if (status.status === 'offline-ready' || status.status === 'ready' || status.status === 'update-available') return '可离线使用'
+  if (status.status === 'unsupported') return '不支持或开发模式'
+  return '正在准备离线外壳'
+}
+
 export function OfflineHomeHint() {
   const local = useLocalStateSnapshot()
   const [check, setCheck] = useState<KnowledgeUpdateCheck>()
@@ -131,26 +147,26 @@ export function OfflinePage() {
     const standalone = typeof window !== 'undefined' && isStandalone(window.matchMedia?.('(display-mode: standalone)').matches ?? false, (navigator as Navigator & { standalone?: boolean }).standalone === true)
     return standalone ? '主屏幕 Web App' : isIphoneSafari(navigator.userAgent) ? 'iPhone Safari 标签页' : '浏览器标签页'
   })()
+  const knowledgeVersion = pointer?.content_version ?? (appData.state.status === 'ready' || appData.state.status === 'empty' ? appData.state.data.contentVersion : '未知版本')
+  const filesPercent = job?.files_total ? Math.round(job.files_done / job.files_total * 100) : 0
+  const bytesPercent = job?.payload_bytes_total ? Math.round(job.payload_bytes_done / job.payload_bytes_total * 100) : 0
   return <section className="atlas-page offline-page"><p className="atlas-coordinate">LOCAL / OFFLINE</p><h1 tabIndex={-1}>离线与更新</h1>
-    <dl className="offline-overview"><div><dt>运行模式</dt><dd>{currentMode}</dd></div><div><dt>应用外壳</dt><dd>{({ unsupported: '不支持或开发模式', registering: '注册中', ready: '已就绪', 'offline-ready': '离线外壳已就绪', 'update-available': '应用更新可用', activating: '正在更新', error: '注册失败' } as Record<string, string>)[appUpdate.state.status]}</dd></div><div><dt>离线知识</dt><dd>{pointer ? `已激活 ${pointer.content_version}` : '尚未完整下载'}</dd></div></dl>
+    <dl className="offline-overview offline-primary"><div><dt>应用</dt><dd>{shellSummary(appUpdate.state)}<small>版本 {APP_VERSION}</small></dd></div><div><dt>知识</dt><dd>{knowledgeVersion}<small>{pointer ? '已完整离线' : '尚未完整离线'}</small></dd></div><div><dt>更新</dt><dd>{updateSummary(check)}<small>{check?.status === 'cooldown' ? '近期已检查' : check?.status === 'update-available' ? '可下载更新' : ''}</small></dd></div></dl>
+    {appUpdate.state.status === 'error' && <p className="offline-card" role="status">应用离线外壳注册失败。在线浏览仍可使用。</p>}
     {!runtime && <p role="status">此浏览器不支持 Cache Storage，无法提供完整离线知识。</p>}
-    {job && <section className="offline-card"><h2>{jobLabel(job.status)}</h2><p>{job.content_version} · {job.files_done} / {job.files_total} 个文件 · {displayBytes(job.payload_bytes_done)} / {displayBytes(job.payload_bytes_total)}（{job.payload_bytes_total ? Math.min(100, Math.round(job.payload_bytes_done / job.payload_bytes_total * 100)) : 100}%）</p><p>建议预留空间：{displayBytes(Math.max(0, job.required_storage_bytes - job.payload_bytes_total))}</p>{job.error_message && <details><summary>查看错误详情</summary><p>{job.error_message}</p></details>}</section>}
+    {job && <section className="offline-card"><h2>{jobLabel(job.status)}</h2><p>{job.content_version} · {job.files_done} / {job.files_total} · {filesPercent}%</p><p>{displayBytes(job.payload_bytes_done)} / {displayBytes(job.payload_bytes_total)}（{bytesPercent}%）</p>{bytesPercent === 100 && job.status === 'failed' && <p>内容已传输，但仍有文件未通过验证。</p>}<p>建议预留空间：{displayBytes(Math.max(0, job.required_storage_bytes - job.payload_bytes_total))}</p>{job.error_message && <details><summary>查看错误详情</summary><p>下载未完成。有 1 个文件未通过验证。</p><p>{job.error_message}</p></details>}</section>}
     {lowSpace && <section className="offline-card"><h2>空间接近下载所需</h2><dl className="offline-overview"><div><dt>预计下载</dt><dd>{displayBytes(lowSpace.payload_bytes_total)}</dd></div><div><dt>建议预留</dt><dd>{displayBytes(lowSpace.required_storage_bytes - lowSpace.payload_bytes_total)}</dd></div><div><dt>浏览器估算可用</dt><dd>{displayBytes(lowSpace.available)}</dd></div></dl><p>可用空间可以容纳内容本身，但不足以保留建议的安全余量；下载可能因浏览器缓存压力失败。</p><div className="offline-actions"><button type="button" disabled={Boolean(busy)} onClick={() => void startDownload({ confirmLowSpace: true })}>仍然开始</button><button type="button" disabled={Boolean(busy)} onClick={() => setLowSpace(undefined)}>取消</button></div></section>}
-    {verification && <p role="status">完整性检查：{verification.status}。{verification.message}</p>}
-    {check && <p role="status">知识检查：{check.message}</p>}
-    {error && <p role="alert">{error}</p>}
     <div className="offline-actions">
-      {!pointer && (!job || job.error_code === 'confirmation-required') && !lowSpace && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void startDownload()}>开始完整下载</button>}
+      {!pointer && (!job || job.error_code === 'confirmation-required') && !lowSpace && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void startDownload()}>下载完整知识库</button>}
       {job?.status === 'downloading' && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('pause', () => runtime!.download.pause(job.job_id))}>暂停</button>}
-      {(job?.status === 'paused' || job?.status === 'failed') && job.error_code !== 'confirmation-required' && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('resume', async () => { await runtime!.download.retry(job.job_id) })}>{job.status === 'paused' ? '继续' : '重试失败'}</button>}
+      {(job?.status === 'paused' || job?.status === 'failed') && job.error_code !== 'confirmation-required' && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('resume', async () => { await runtime!.download.retry(job.job_id) })}>{job.status === 'paused' ? '继续' : '重试'}</button>}
       {(job?.status === 'paused' || job?.status === 'failed') && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('abandon', () => runtime!.download.abandon(job.job_id))}>放弃此次下载</button>}
       {job?.status === 'ready-to-activate' && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void activate()}>激活已验证版本</button>}
-      <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('check', async () => { setCheck(await runtime!.checker.check({ manual: true })) })}>检查知识更新</button>
+      <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('check', async () => { setCheck(await runtime!.checker.check({ manual: true })) })}>检查更新</button>
       {pointer && check?.status === 'update-available' && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('update', async () => { await runtime!.download.start({ reuseActiveFiles: true }) })}>下载更新</button>}
-      {pointer && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('redownload', async () => { await runtime!.download.start({ reuseActiveFiles: true, forceCandidate: true }) })}>重新下载知识库</button>}
-      {pointer && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('verify', async () => { setVerification(await verifyActiveContent(runtime!.storage, appData.state.status === 'ready' || appData.state.status === 'empty' ? appData.state.data.contentVersion : undefined)) })}>重新验证当前活动指针</button>}
-      {verification && verification.status !== 'healthy' && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('repair', async () => { const result = await new ContentRepairManager(runtime!.download, runtime!.storage).stageRepair(); if (!result.job || result.job.status !== 'ready-to-activate') throw new Error('无法完成修复候选下载。') })}>下载修复候选</button>}
+      {pointer && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('redownload', async () => { await runtime!.download.start({ reuseActiveFiles: true, forceCandidate: true }) })}>重新下载</button>}
     </div>
+    <details className="offline-diagnostics"><summary>高级诊断与维护</summary><p>运行模式：{currentMode}</p><p>应用外壳：{appUpdate.state.status}；Service Worker：{appUpdate.state.error ?? '无错误'}</p><p>活动指针：{pointer ? `${pointer.content_version} / ${pointer.cache_name}` : '无'}</p><p>检查结果：{check?.message ?? '尚未检查'}</p><p>完整性检查：{verification ? `${verification.status}。${verification.message}` : '尚未执行'}</p>{error && <p role="alert">{error}</p>}<div className="offline-actions">{pointer && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('verify', async () => { setVerification(await verifyActiveContent(runtime!.storage, appData.state.status === 'ready' || appData.state.status === 'empty' ? appData.state.data.contentVersion : undefined)) })}>重新验证</button>}{verification && verification.status !== 'healthy' && <button type="button" disabled={!runtime || Boolean(busy)} onClick={() => void run('repair', async () => { const result = await new ContentRepairManager(runtime!.download, runtime!.storage).stageRepair(); if (!result.job || result.job.status !== 'ready-to-activate') throw new Error('无法完成修复候选下载。') })}>下载修复候选</button>}</div></details>
     <p className="offline-note">下载不会在应用关闭后继续。请在主屏幕 Web App 中完成下载和个人状态记录。</p>
   </section>
 }
