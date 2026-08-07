@@ -14,9 +14,9 @@ import { ContentRepairManager } from '../../pwa/update/content-repair'
 import { cleanupTemporaryContentCaches } from '../../pwa/update/cache-cleanup'
 import { listContentCaches, readActivePointer, type ContentCacheStorage } from '../../pwa/content-cache'
 import { type ActiveContentPointer } from '../../pwa/cache-protocol'
-import { localState } from '../state/local-state'
 import { useAppUpdate } from '../../pwa/app-update-context'
 import { applyPersonalRestore, clearAllPersonalData, countCurrentPersonalData, exportPersonalBackup, getBackupReminderState, preparePersonalRestore, readPersonalBackupFile, setBackupReminderEnabled, type BackupReminderState, type PreparedRestore } from '../backup/personal-backup'
+import { shellSummary, updateSummary } from '../offline/offline-summary'
 
 type Runtime = { storage: ContentCacheStorage; download: ContentDownloadManager; checker: KnowledgeUpdateChecker }
 
@@ -48,43 +48,6 @@ function activeJob(jobs: ReturnType<typeof useLocalStateSnapshot>['offlineJobs']
     ?? [...jobs].sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0]
 }
 
-export function updateSummary(check: KnowledgeUpdateCheck | undefined): string {
-  if (!check) return '尚未检查'
-  if (check.status === 'up-to-date') return '已是最新'
-  if (check.status === 'update-available') return '发现新知识版本'
-  if (check.status === 'cooldown') return '近期已检查'
-  if (check.status === 'first-download-available') return '可下载完整知识库'
-  return '暂时无法确认更新'
-}
-
-export function shellSummary(status: ReturnType<typeof useAppUpdate>['state']): string {
-  if (status.status === 'error') return '离线外壳注册失败'
-  if (status.status === 'offline-ready' || status.status === 'ready' || status.status === 'update-available') return '可离线使用'
-  if (status.status === 'unsupported') return '不支持或开发模式'
-  return '正在准备离线外壳'
-}
-
-export function OfflineHomeHint() {
-  const local = useLocalStateSnapshot()
-  const [check, setCheck] = useState<KnowledgeUpdateCheck>()
-  useEffect(() => { void localState.getAppMeta<KnowledgeUpdateCheck>('offline.last-check').then(setCheck).catch(() => undefined) }, [local.offlineJobs])
-  const job = activeJob(local.offlineJobs)
-  if (check?.status === 'update-available') return <aside className="home-offline-hint" role="status"><p>有新的知识版本可用。</p><Link to="/me/offline">查看离线与更新</Link></aside>
-  if (job?.status === 'failed') return <aside className="home-offline-hint" role="status"><p>知识下载未完成：{job.error_message || '请重试。'}</p><Link to="/me/offline">继续处理</Link></aside>
-  if (!local.offlineJobs.some((entry) => entry.status === 'active')) return <aside className="home-offline-hint"><p>尚未完整下载知识库；离线阅读需要由你主动开始。</p><Link to="/me/offline">设置离线知识</Link></aside>
-  return null
-}
-
-export function BackupReminder() {
-  const { state } = useAppData()
-  const local = useLocalStateSnapshot()
-  const [reminder, setReminder] = useState<BackupReminderState>()
-  const [later, setLater] = useState(false)
-  const knowledgeVersion = state.status === 'ready' || state.status === 'empty' ? state.data.contentVersion : 'unknown'
-  useEffect(() => { void getBackupReminderState(knowledgeVersion).then(setReminder).catch(() => undefined) }, [knowledgeVersion, local.nodeStates, local.questionChains, local.questionDrafts, local.opinions, local.pendingRemovals])
-  if (!reminder?.due || later) return null
-  return <aside className="home-offline-hint" role="status"><p>个人状态已有 {reminder.mutationCount} 次变更，建议导出一份本地备份。</p><Link to="/me/backups">前往备份</Link><button type="button" onClick={() => setLater(true)}>稍后</button><button type="button" onClick={() => void setBackupReminderEnabled(false).then(() => setReminder({ ...reminder, enabled: false, due: false }))}>关闭提醒</button></aside>
-}
 
 export function OfflinePage() {
   const appData = useAppData()

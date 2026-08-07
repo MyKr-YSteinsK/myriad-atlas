@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shellSummary, updateSummary } from '../../src/app/pages/OfflinePages'
+import { shellSummary, updateSummary } from '../../src/app/offline/offline-summary'
 
 describe('offline primary status copy', () => {
   it('keeps a healthy active version concise and treats cooldown as non-error', () => {

@@ -4,7 +4,7 @@ import type { RuntimeRoute } from '../../content/types'
 import { useAppData } from '../data/app-data-context'
 import { continueRoute, resolveRecentRoute, routeProgress } from '../data/route-progress'
 import { useLocalStateSnapshot } from '../state/use-local-state'
-import { BackupReminder, OfflineHomeHint } from './OfflinePages'
+import { BackupReminder, OfflineHomeHint } from '../offline/offline-hints'
 
 export function HomePage() {
   const { state, repository } = useAppData()

@@ -9,7 +9,7 @@ import { useLocalStateSnapshot } from '../state/use-local-state'
 import { APP_VERSION } from '../../lib/content-version'
 import { InstallGuidance } from '../../pwa/InstallGuidance'
 import { useAppUpdate, useUpdateFlush } from '../../pwa/app-update-context'
-import { BackupReminder } from './OfflinePages'
+import { BackupReminder } from '../offline/offline-hints'
 
 function useCatalog() {
   const { state } = useAppData()

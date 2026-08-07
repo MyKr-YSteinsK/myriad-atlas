@@ -18,6 +18,7 @@
 - Workbox 应用预缓存与版本化知识缓存必须分离；Cache Storage active pointer 是知识读取的唯一版本来源，active 缺文件不得回退网络。
 - 下载、知识更新与恢复必须先验证完整候选再切换；Service Worker 不自动 skip waiting，iPhone 主屏幕 Web App 不承诺后台下载。
 - 个人备份只包含不可重新下载的个人数据，不得包含正文、媒体、搜索索引、Cache Storage 或离线任务；恢复和清除个人数据不得清理 active 知识缓存。
+- `inbox/authoring/` 是永不提交的本地草稿区；`content:new` 与 `batch:create` 只能准备草稿、ZIP 和 dry-run，不得 apply、commit 或 push。删除、移动和 QA ID 分配必须继续使用显式的高级工作流，禁止由通用作者工具推断。
 
 ## 实施与 Git
 
