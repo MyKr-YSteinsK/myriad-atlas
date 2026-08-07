@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import type { RuntimeCatalog, RuntimeNode } from '../../content/types'
 import { localState } from '../state/local-state'
 import { ReaderSettings } from './ReaderSettings'
@@ -24,6 +24,7 @@ function currentAnchor(toc: RuntimeNode['toc']): string {
 }
 
 export function ReaderPage({ node, catalog }: ReaderPageProps) {
+  const location = useLocation()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [progressWarning, setProgressWarning] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -126,9 +127,10 @@ export function ReaderPage({ node, catalog }: ReaderPageProps) {
     return record ? <li key={id}><Link to={`/node/${id}`}>{record.title}</Link></li> : <li key={id} className="reader-data-error">构建异常：未在目录中找到节点 {id}</li>
   })}</ul></section>
 
+  const mapReturn = new URLSearchParams(location.search).get('map') === '1' ? `/map?${new URLSearchParams([...new URLSearchParams(location.search)].filter(([key]) => key !== 'map')).toString()}` : '/'
   return <main className={`reader ${preferences.font === 'serif' ? 'reader-serif' : ''} ${preferences.codeWrap ? 'reader-code-wrap' : ''}`} style={articleStyle}>
     <header className={`reader-topbar ${topBarVisible ? '' : 'reader-topbar-hidden'}`}>
-      <Link to="/" className="reader-back">返回知识航图</Link>
+      <Link to={mapReturn} className="reader-back">返回知识航图</Link>
       <div className="reader-actions">{preferences.showToc && node.toc.length > 0 && <button type="button" onClick={() => document.getElementById('reader-toc')?.scrollIntoView({ block: 'start' })}>目录</button>}<button ref={settingsButton} type="button" onClick={() => setSettingsOpen(true)}>阅读设置</button></div>
       {preferences.showProgress && <div className="reader-progress" aria-label={`阅读进度 ${Math.round(progress * 100)}%`}><span style={{ transform: `scaleX(${progress})` }} /></div>}
     </header>

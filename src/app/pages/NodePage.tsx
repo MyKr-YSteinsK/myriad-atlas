@@ -34,7 +34,8 @@ export function NodePage() {
     }
   }, [appData.state, location.search, nodeId])
 
-  if (error?.nodeId === nodeId) return <main className="app-shell"><section className="message-state" role="alert"><h1>节点无法加载</h1><p>{error.value.message}</p><button type="button" onClick={() => { setError(undefined); setRetry((value) => value + 1) }}>重试</button><Link to="/">返回知识航图</Link></section></main>
+  const mapReturn = new URLSearchParams(location.search).get('map') === '1' ? `/map?${new URLSearchParams([...new URLSearchParams(location.search)].filter(([key]) => key !== 'map')).toString()}` : '/'
+  if (error?.nodeId === nodeId) return <main className="app-shell"><section className="message-state" role="alert"><h1>节点无法加载</h1><p>{error.value.message}</p><button type="button" onClick={() => { setError(undefined); setRetry((value) => value + 1) }}>重试</button><Link to={mapReturn}>返回知识航图</Link></section></main>
   if (!node || node.id !== nodeId) return <main className="app-shell"><section className="message-state" aria-live="polite"><h1>正在加载节点</h1><p>正在读取已编译的阅读内容。</p></section></main>
   return <ReaderPage node={node} catalog={contentClient.getCachedCatalog()} />
 }
