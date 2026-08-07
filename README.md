@@ -21,6 +21,8 @@ npm run verify
 
 在 iPhone Safari 打开站点后，通过“分享 → 添加到主屏幕”安装。请从主屏幕 Web App 中主动开始“完整下载知识库”；应用关闭后不会承诺后台下载。个人备份仅包含阅读与个人状态，不包含可重新下载的正文、媒体或离线缓存。
 
+应用外壳与 Knowledge snapshot 独立版本化：应用更新不会要求知识版本同步升级。应用版本日志属于外壳预缓存；知识正文、媒体和搜索索引属于版本化知识快照。“重新下载”始终先创建并验证 staged candidate，不会原地覆盖 active 缓存；同一知识版本若出现真正的核心 fingerprint 变化，会被视为发布异常而拒绝覆盖。
+
 日常内容生产先在本地 `inbox/authoring/` 草稿区完成；它永不提交。`content:new` 只生成带 TODO 的结构骨架，`batch:create` 只创建 ZIP 并执行 dry-run，删除、移动和 QA 继续使用高级流程：
 
 ```powershell

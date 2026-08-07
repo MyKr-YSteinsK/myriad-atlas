@@ -193,7 +193,10 @@ describe('knowledge activation, update and repair', () => {
     await expect(createDownload(storage, v1).start()).rejects.toThrow('降级')
 
     const conflicting = await makeFixture('2026.07.31-01', { '_generated/catalog.json': 'different' })
-    await expect(new KnowledgeUpdateChecker({ download: createDownload(storage, conflicting), cacheStorage: storage }).check({ manual: true })).resolves.toMatchObject({ status: 'fingerprint-conflict' })
+    await expect(new KnowledgeUpdateChecker({ download: createDownload(storage, conflicting), cacheStorage: storage }).check({ manual: true })).resolves.toMatchObject({
+      status: 'fingerprint-conflict',
+      message: '同一知识版本对应不同知识内容。请发布新的知识版本后再更新。',
+    })
     await expect(createDownload(storage, conflicting).start({ forceCandidate: true })).rejects.toThrow('同一知识版本')
   })
 
@@ -213,7 +216,7 @@ describe('knowledge activation, update and repair', () => {
     })
 
     await expect(new KnowledgeUpdateChecker({ download: createDownload(storage, rebuilt), cacheStorage: storage }).check({ manual: true }))
-      .resolves.toMatchObject({ status: 'up-to-date', artifact_snapshot_changed: true })
+      .resolves.toMatchObject({ status: 'up-to-date', artifact_snapshot_changed: true, message: '线上构建快照与本地副本不同；知识内容一致。' })
     const fetchSpy = vi.fn()
     const replacement = createDownload(storage, rebuilt, fetchSpy)
     const candidate = await replacement.start({ forceCandidate: true, reuseActiveFiles: true })

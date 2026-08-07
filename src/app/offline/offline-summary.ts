@@ -3,10 +3,11 @@ import type { KnowledgeUpdateCheck } from '../../pwa/update/knowledge-update-che
 
 export function updateSummary(check: KnowledgeUpdateCheck | undefined): string {
   if (!check) return '尚未检查'
-  if (check.status === 'up-to-date') return '已是最新'
+  if (check.status === 'up-to-date') return '已是最新知识'
   if (check.status === 'update-available') return '发现新知识版本'
   if (check.status === 'cooldown') return '近期已检查'
   if (check.status === 'first-download-available') return '可下载完整知识库'
+  if (check.status === 'fingerprint-conflict') return '检测到发布版本异常'
   return '暂时无法确认更新'
 }
 

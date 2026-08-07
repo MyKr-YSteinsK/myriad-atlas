@@ -4,7 +4,8 @@ import { shellSummary, updateSummary } from '../../src/app/offline/offline-summa
 describe('offline primary status copy', () => {
   it('keeps a healthy active version concise and treats cooldown as non-error', () => {
     expect(shellSummary({ status: 'offline-ready', lifecycle: 'controlling', appVersion: '0.3.1' })).toBe('可离线使用')
-    expect(updateSummary({ status: 'up-to-date', checked_at: '2026-08-07T00:00:00.000Z', message: 'Active knowledge is up to date.' })).toBe('已是最新')
+    expect(updateSummary({ status: 'up-to-date', checked_at: '2026-08-07T00:00:00.000Z', message: 'Active knowledge is up to date.' })).toBe('已是最新知识')
     expect(updateSummary({ status: 'cooldown', checked_at: '2026-08-07T00:00:00.000Z', message: '近期已检查过知识更新。' })).toBe('近期已检查')
+    expect(updateSummary({ status: 'fingerprint-conflict', checked_at: '2026-08-07T00:00:00.000Z', message: '同一知识版本对应不同知识内容。' })).toBe('检测到发布版本异常')
   })
 })

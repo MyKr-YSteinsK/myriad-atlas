@@ -1,6 +1,9 @@
 schema_version: 1
-current_version: 0.4.0
+current_version: 0.4.1
 entries:
+  - version: 0.4.1
+    date: 2026-08-07
+    summary: 修复应用升级后旧离线知识的版本元数据冲突，并完善同知识版本的安全刷新与恢复。
   - version: 0.4.0
     date: 2026-08-07
     summary: 增加本地内容作者工作流，优化知识航图和离线管理界面，并降低低频页面的首屏加载成本。

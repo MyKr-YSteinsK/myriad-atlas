@@ -1,7 +1,7 @@
 schema_version: 1
-current_version: 0.4.0
+current_version: 0.4.1
 entries:
-  - version: 0.4.0
+  - version: 0.4.1
     date: 2026-08-07
     summary: Fixture app version for runtime build compatibility.
   - version: 0.3.1

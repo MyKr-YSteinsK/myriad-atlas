@@ -72,8 +72,8 @@ export class KnowledgeUpdateChecker {
           const activeKnowledgeFingerprint = await knowledgeFingerprint(activeManifest)
           const artifactSnapshotChanged = active.manifest_fingerprint !== payload.fingerprint
           result = activeKnowledgeFingerprint === networkKnowledgeFingerprint
-            ? { status: 'up-to-date', checked_at, manifest: payload.manifest, fingerprint: payload.fingerprint, knowledge_fingerprint: networkKnowledgeFingerprint, artifact_snapshot_changed: artifactSnapshotChanged, message: artifactSnapshotChanged ? 'The network artifact snapshot changed, but the knowledge content is unchanged.' : 'Active knowledge is up to date.' }
-            : { status: 'fingerprint-conflict', checked_at, manifest: payload.manifest, fingerprint: payload.fingerprint, knowledge_fingerprint: networkKnowledgeFingerprint, message: 'The same knowledge version has different knowledge content. Publish a new Knowledge version before updating.' }
+            ? { status: 'up-to-date', checked_at, manifest: payload.manifest, fingerprint: payload.fingerprint, knowledge_fingerprint: networkKnowledgeFingerprint, artifact_snapshot_changed: artifactSnapshotChanged, message: artifactSnapshotChanged ? '线上构建快照与本地副本不同；知识内容一致。' : '已是最新知识。' }
+            : { status: 'fingerprint-conflict', checked_at, manifest: payload.manifest, fingerprint: payload.fingerprint, knowledge_fingerprint: networkKnowledgeFingerprint, message: '同一知识版本对应不同知识内容。请发布新的知识版本后再更新。' }
         }
       }
     }

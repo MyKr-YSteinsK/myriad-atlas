@@ -7,7 +7,7 @@
 - `src/lib/base-path.ts`：项目子路径与 Hash URL 的唯一解析入口；`src/lib/content-client.ts` / `search-repository.ts`：可失效重载的 ContentRepository 与 Pagefind SearchRepository。
 - `src/app/reader/`：沉浸阅读器、设置面板、阅读设置生命周期 flush 及仅开发环境的长文样本；`src/app/state/reader-db.ts`：保留 v1 / v2 迁移链的 Dexie v3 数据库，包含个人状态、离线任务/文件和应用元数据表。
 - `src/app/state/local-state.ts`：节点状态、路线位置、问题草稿、待删除、意见、阅读设置和应用偏好的唯一写入服务；个人写入统一维护备份 mutation count，同标签页 revision 订阅不跟踪下载进度。
-- `src/pwa/`：可安装外壳、Service Worker 注册/更新生命周期、安装指引、Cache Storage 活动版本指针与 Dexie UI 镜像协调。`download/` 管理暂停/继续、SHA-256 校验和版本化候选；`update/` 管理更新检查、原子激活、回滚、完整性修复与临时缓存清理。离线内容的活动版本始终以 Cache Storage pointer 为准，缺失文件不会回退网络。
+- `src/pwa/`：可安装外壳、Service Worker 注册/更新生命周期、安装指引、Cache Storage 活动版本指针与 Dexie UI 镜像协调。`download/` 管理暂停/继续、SHA-256 校验和版本化候选；`update/` 管理更新检查、原子激活、回滚、完整性修复与临时缓存清理。离线内容的活动版本始终以 Cache Storage pointer 为准，缺失文件不会回退网络；`knowledge-fingerprint.ts` 表示核心知识语义身份，`manifest_fingerprint` 表示完整 artifact/cache identity。
 - `src/app/backup/personal-backup.ts` 与 `schemas/backup/`：同源严格 Schema、稳定个人数据快照、iPhone 分享/下载导出、提醒、恢复预检和整套替换。恢复与清除不触及离线知识缓存。
 - `src/app/data/route-progress.ts`：路线进度与继续算法；`question-chains.ts`：QA ID、原子问题链创建、绑定和生成请求；`roaming.ts`：漫游池与安全随机；`knowledge-map-model.ts`：将图结构、目录、taxonomy 与路线索引严格 join 为航图 view model。
 - `src/app/styles/global.css`：主题 token、safe area、减少动态效果与阅读排版。
@@ -29,7 +29,7 @@
 - `public/_generated/qa-index.json`：线性正式问题链索引；`npm run content:fixture` / `dev:fixture`：仅从测试语料生成本地非空运行时数据。
 - `scripts/content/build-knowledge-map.ts` → `generated/knowledge-map.md`：可提交的确定性知识地图。
 - `generated/imported-batches.json`：可提交的导入批次索引；`inbox/authoring/`：永不提交的作者草稿区；`inbox/`：本地批次与报告目录。
-- `dist/`：Vite 部署产物，不提交；`npm run build` 同时注入 `dist/sw.js` 的应用外壳预缓存，运行时知识内容不进入该预缓存。
+- `dist/`：Vite 部署产物，不提交；`npm run build` 同时注入 `dist/sw.js` 的应用外壳预缓存。App shell 包含 JS/CSS/index/manifest 与 app changelog；Knowledge snapshot 包含 catalog/taxonomy/routes/nodes/QA/map、knowledge changelog、Pagefind、media 与 content manifest。运行时知识内容不进入应用外壳预缓存。
 
 ## 命令与部署
 
