@@ -56,7 +56,7 @@ jobs:
             echo 'Missing both empty-corpus search status and Pagefind index.'
             exit 1
           fi
-          if rg -F 'self.__WB_MANIFEST' dist/sw.js; then
+          if grep -Fq 'self.__WB_MANIFEST' dist/sw.js; then
             echo 'Service Worker precache manifest was not injected.'
             exit 1
           fi
@@ -68,7 +68,7 @@ jobs:
             echo 'Source content or test files leaked into dist.'
             exit 1
           fi
-          if rg -l 'APP_FIXTURE_ONLY|READER_PREVIEW_ONLY|Plan-[0-9]+' dist; then
+          if grep -RIlE 'APP_FIXTURE_ONLY|READER_PREVIEW_ONLY|Plan-[0-9]+' dist >/dev/null; then
             echo 'Development-only content leaked into dist.'
             exit 1
           fi
