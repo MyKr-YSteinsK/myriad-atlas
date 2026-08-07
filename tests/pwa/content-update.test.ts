@@ -46,10 +46,18 @@ async function hash(value: ArrayBuffer): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
+function fixtureKind(path: string): string {
+  if (path.includes('/pagefind/')) return 'pagefind'
+  if (path.includes('/nodes/')) return 'node'
+  if (path.startsWith('media/')) return 'media'
+  if (path.endsWith('app-changelog.json')) return 'app-changelog'
+  return path.includes('catalog') ? 'catalog' : 'runtime'
+}
+
 async function makeFixture(version: string, entries: Record<string, string>): Promise<{ manifest: DownloadManifest; text: string; responses: Map<string, Response> }> {
   const files = await Promise.all(Object.entries(entries).map(async ([path, text]) => {
     const bytes = new TextEncoder().encode(text)
-    return { path, kind: path.includes('catalog') ? 'catalog' : 'runtime', bytes: bytes.byteLength, sha256: await hash(bytes.buffer as ArrayBuffer) }
+    return { path, kind: fixtureKind(path), bytes: bytes.byteLength, sha256: await hash(bytes.buffer as ArrayBuffer) }
   }))
   const manifest: DownloadManifest = { schema_version: 1, content_version: version, base_path: '/myriad-atlas/', files }
   return {
@@ -186,7 +194,37 @@ describe('knowledge activation, update and repair', () => {
 
     const conflicting = await makeFixture('2026.07.31-01', { '_generated/catalog.json': 'different' })
     await expect(new KnowledgeUpdateChecker({ download: createDownload(storage, conflicting), cacheStorage: storage }).check({ manual: true })).resolves.toMatchObject({ status: 'fingerprint-conflict' })
-    await expect(createDownload(storage, conflicting).start()).rejects.toThrow('指纹')
+    await expect(createDownload(storage, conflicting).start({ forceCandidate: true })).rejects.toThrow('同一知识版本')
+  })
+
+  it('treats same-version Pagefind rebuilds and legacy app metadata as compatible, while staging a separate candidate', async () => {
+    const storage = new MemoryCacheStorage()
+    const legacy = await makeFixture('2026.07.30-01', {
+      '_generated/catalog.json': 'catalog',
+      '_generated/app-changelog.json': '0.3.1',
+      '_generated/pagefind/entry-a.pf_index': 'pagefind-a',
+    })
+    const first = createDownload(storage, legacy)
+    const active = await first.start()
+    await activation(storage, first).manager.activate(active.job_id)
+    const rebuilt = await makeFixture('2026.07.30-01', {
+      '_generated/catalog.json': 'catalog',
+      '_generated/pagefind/entry-b.pf_index': 'pagefind-b',
+    })
+
+    await expect(new KnowledgeUpdateChecker({ download: createDownload(storage, rebuilt), cacheStorage: storage }).check({ manual: true }))
+      .resolves.toMatchObject({ status: 'up-to-date', artifact_snapshot_changed: true })
+    const fetchSpy = vi.fn()
+    const replacement = createDownload(storage, rebuilt, fetchSpy)
+    const candidate = await replacement.start({ forceCandidate: true, reuseActiveFiles: true })
+    expect(candidate.cache_name).not.toBe(active.cache_name)
+    expect(candidate.status).toBe('ready-to-activate')
+    const paths = fetchSpy.mock.calls.map(([input]) => new URL(typeof input === 'string' ? input : input.toString(), origin).pathname)
+    expect(paths).not.toContain(basePath('_generated/catalog.json'))
+
+    await expect(activation(storage, replacement, { smoke: async () => { throw new Error('same-version-smoke-failed') } }).manager.activate(candidate.job_id))
+      .resolves.toMatchObject({ active: false, rollback: 'succeeded', pointer_restored: true })
+    expect((await readActivePointer(storage))?.cache_name).toBe(active.cache_name)
   })
 
   it('detects missing and corrupt active files, stages repair separately, and cleans only unreferenced content caches', async () => {

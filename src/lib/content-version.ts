@@ -1,4 +1,4 @@
-export type ContentVersionComparison = 'older' | 'equal' | 'newer' | 'fingerprint-mismatch'
+export type ContentVersionComparison = 'older' | 'equal' | 'newer'
 
 export const APP_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '0.2.0'
 export const DATA_FORMAT_VERSION = typeof __DATA_FORMAT_VERSION__ === 'number' ? __DATA_FORMAT_VERSION__ : 1
@@ -11,11 +11,11 @@ export function parseContentVersion(value: string): { year: number; month: numbe
   return { year, month, day, sequence }
 }
 
-export function compareContentVersions(active: string, candidate: string, activeFingerprint?: string, candidateFingerprint?: string): ContentVersionComparison | undefined {
+export function compareContentVersions(active: string, candidate: string): ContentVersionComparison | undefined {
   const left = parseContentVersion(active)
   const right = parseContentVersion(candidate)
   if (!left || !right) return undefined
-  if (active === candidate) return activeFingerprint && candidateFingerprint && activeFingerprint !== candidateFingerprint ? 'fingerprint-mismatch' : 'equal'
+  if (active === candidate) return 'equal'
   const leftValue = (((left.year * 100) + left.month) * 100 + left.day) * 100 + left.sequence
   const rightValue = (((right.year * 100) + right.month) * 100 + right.day) * 100 + right.sequence
   return leftValue < rightValue ? 'older' : 'newer'

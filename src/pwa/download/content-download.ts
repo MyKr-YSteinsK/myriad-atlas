@@ -1,5 +1,6 @@
 import { basePath, PROJECT_BASE_PATH } from '../../lib/base-path'
 import { compareContentVersions, parseContentVersion } from '../../lib/content-version'
+import { knowledgeFingerprint } from '../../lib/knowledge-fingerprint'
 import { localState } from '../../app/state/local-state'
 import type { OfflineFile, OfflineJob } from '../../app/state/reader-db'
 import { canonicalContentPath, contentCacheName, contentCandidateCacheName, type ContentManifestFile, withNetworkBypass } from '../cache-protocol'
@@ -147,11 +148,11 @@ export class ContentDownloadManager {
   async start(options: { confirmLowSpace?: boolean; reuseActiveFiles?: boolean; forceCandidate?: boolean } = {}): Promise<OfflineJob> {
     const payload = await this.fetchManifest()
     const active = await readActivePointer(this.cacheStorage)
-    const comparison = active ? compareContentVersions(active.content_version, payload.manifest.content_version, active.manifest_fingerprint, payload.fingerprint) : undefined
-    if (comparison === 'fingerprint-mismatch') {
-      throw new Error('内容版本指纹与当前活动版本冲突。')
-    }
+    const comparison = active ? compareContentVersions(active.content_version, payload.manifest.content_version) : undefined
     if (comparison === 'newer') throw new Error('网络内容版本比当前活动版本更旧，已阻止降级。')
+    if (comparison === 'equal' && active && await knowledgeFingerprint(await this.readActiveManifest(active.cache_name, active.manifest_fingerprint, active.content_version)) !== await knowledgeFingerprint(payload.manifest)) {
+      throw new Error('同一知识版本对应了不同知识内容。请先发布新的 Knowledge version。')
+    }
     const estimate = await this.estimate(payload.bytes.byteLength, payload.manifest.files)
     if (estimate.blocked) throw new InsufficientStorageError(estimate)
     if (estimate.confirmation_required && !options.confirmLowSpace) throw new LowSpaceConfirmationRequiredError(estimate)
@@ -353,6 +354,17 @@ export class ContentDownloadManager {
     let manifest: unknown
     try { manifest = JSON.parse(new TextDecoder().decode(bytes)) } catch { throw new Error('候选缓存内容清单损坏。') }
     if (!isDownloadManifest(manifest) || manifest.content_version !== job.content_version) throw new Error('候选缓存内容清单无效。')
+    return manifest
+  }
+
+  private async readActiveManifest(cacheName: string, fingerprint: string, version: string): Promise<DownloadManifest> {
+    const response = await (await this.cacheStorage.open(cacheName)).match(basePath('_generated/content-manifest.json'))
+    if (!response) throw new Error('当前活动知识缓存缺少内容清单。')
+    const bytes = await response.arrayBuffer()
+    if (await this.digest(bytes) !== fingerprint) throw new Error('当前活动知识缓存内容清单指纹不一致。')
+    let manifest: unknown
+    try { manifest = JSON.parse(new TextDecoder().decode(bytes)) } catch { throw new Error('当前活动知识缓存内容清单已损坏。') }
+    if (!isDownloadManifest(manifest) || manifest.content_version !== version) throw new Error('当前活动知识缓存内容清单无效。')
     return manifest
   }
 

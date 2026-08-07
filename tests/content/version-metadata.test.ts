@@ -8,6 +8,6 @@ describe('runtime version metadata', () => {
     expect(compareContentVersions('2026.07.30-01', '2026.08.01-01')).toBe('older')
     expect(compareContentVersions('2026.08.01-01', '2026.07.30-01')).toBe('newer')
     expect(compareContentVersions('invalid', '2026.07.30-01')).toBeUndefined()
-    expect(compareContentVersions('2026.07.30-01', '2026.07.30-01', 'a'.repeat(64), 'b'.repeat(64))).toBe('fingerprint-mismatch')
+    expect(compareContentVersions('2026.07.30-01', '2026.07.30-01')).toBe('equal')
   })
 })

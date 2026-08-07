@@ -1,7 +1,9 @@
 import { localState } from '../../app/state/local-state'
+import { basePath } from '../../lib/base-path'
 import { compareContentVersions } from '../../lib/content-version'
+import { knowledgeFingerprint } from '../../lib/knowledge-fingerprint'
 import { readActivePointer, type ContentCacheStorage } from '../content-cache'
-import { ContentDownloadManager, type ManifestPayload } from '../download/content-download'
+import { ContentDownloadManager, isDownloadManifest, sha256, type ManifestPayload } from '../download/content-download'
 
 const DEFAULT_COOLDOWN_MS = 12 * 60 * 60 * 1000
 
@@ -11,6 +13,8 @@ export interface KnowledgeUpdateCheck {
   checked_at: string
   manifest?: ManifestPayload['manifest']
   fingerprint?: string
+  knowledge_fingerprint?: string
+  artifact_snapshot_changed?: boolean
   message: string
 }
 
@@ -55,15 +59,39 @@ export class KnowledgeUpdateChecker {
     const active = await readActivePointer(this.dependencies.cacheStorage)
     let result: KnowledgeUpdateCheck
     if (!active) {
-      result = { status: 'first-download-available', checked_at, manifest: payload.manifest, fingerprint: payload.fingerprint, message: 'Knowledge is available for a first complete download.' }
+      result = { status: 'first-download-available', checked_at, manifest: payload.manifest, fingerprint: payload.fingerprint, knowledge_fingerprint: await knowledgeFingerprint(payload.manifest), message: 'Knowledge is available for a first complete download.' }
     } else {
-      const comparison = compareContentVersions(active.content_version, payload.manifest.content_version, active.manifest_fingerprint, payload.fingerprint)
-      if (comparison === 'equal') result = { status: 'up-to-date', checked_at, manifest: payload.manifest, fingerprint: payload.fingerprint, message: 'Active knowledge is up to date.' }
-      else if (comparison === 'older') result = { status: 'update-available', checked_at, manifest: payload.manifest, fingerprint: payload.fingerprint, message: 'A newer knowledge version is available.' }
-      else if (comparison === 'newer') result = { status: 'downgrade-blocked', checked_at, manifest: payload.manifest, fingerprint: payload.fingerprint, message: 'The network knowledge version is older and was not offered.' }
-      else result = { status: 'fingerprint-conflict', checked_at, manifest: payload.manifest, fingerprint: payload.fingerprint, message: 'The network manifest conflicts with the active version fingerprint.' }
+      const comparison = compareContentVersions(active.content_version, payload.manifest.content_version)
+      const networkKnowledgeFingerprint = await knowledgeFingerprint(payload.manifest)
+      if (comparison === 'older') result = { status: 'update-available', checked_at, manifest: payload.manifest, fingerprint: payload.fingerprint, knowledge_fingerprint: networkKnowledgeFingerprint, message: 'A newer knowledge version is available.' }
+      else if (comparison === 'newer') result = { status: 'downgrade-blocked', checked_at, manifest: payload.manifest, fingerprint: payload.fingerprint, knowledge_fingerprint: networkKnowledgeFingerprint, message: 'The network knowledge version is older and was not offered.' }
+      else {
+        const activeManifest = await this.activeManifest(active.cache_name, active.manifest_fingerprint, active.content_version)
+        if (!activeManifest) result = { status: 'invalid-manifest', checked_at, manifest: payload.manifest, fingerprint: payload.fingerprint, knowledge_fingerprint: networkKnowledgeFingerprint, message: 'The active content manifest is invalid.' }
+        else {
+          const activeKnowledgeFingerprint = await knowledgeFingerprint(activeManifest)
+          const artifactSnapshotChanged = active.manifest_fingerprint !== payload.fingerprint
+          result = activeKnowledgeFingerprint === networkKnowledgeFingerprint
+            ? { status: 'up-to-date', checked_at, manifest: payload.manifest, fingerprint: payload.fingerprint, knowledge_fingerprint: networkKnowledgeFingerprint, artifact_snapshot_changed: artifactSnapshotChanged, message: artifactSnapshotChanged ? 'The network artifact snapshot changed, but the knowledge content is unchanged.' : 'Active knowledge is up to date.' }
+            : { status: 'fingerprint-conflict', checked_at, manifest: payload.manifest, fingerprint: payload.fingerprint, knowledge_fingerprint: networkKnowledgeFingerprint, message: 'The same knowledge version has different knowledge content. Publish a new Knowledge version before updating.' }
+        }
+      }
     }
     await localState.mirrorAppMeta('offline.last-check', result)
     return result
+  }
+
+  private async activeManifest(cacheName: string, fingerprint: string, version: string): Promise<ManifestPayload['manifest'] | undefined> {
+    if (!(await this.dependencies.cacheStorage.keys()).includes(cacheName)) return undefined
+    const response = await (await this.dependencies.cacheStorage.open(cacheName)).match(basePath('_generated/content-manifest.json'))
+    if (!response) return undefined
+    const bytes = await response.arrayBuffer()
+    if (await sha256(bytes) !== fingerprint) return undefined
+    try {
+      const manifest: unknown = JSON.parse(new TextDecoder().decode(bytes))
+      return isDownloadManifest(manifest) && manifest.content_version === version ? manifest : undefined
+    } catch {
+      return undefined
+    }
   }
 }
