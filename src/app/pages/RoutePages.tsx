@@ -6,6 +6,7 @@ import { loadRouteDetails, type RouteDetailResult } from '../data/route-details'
 import { continueRoute, routeProgress } from '../data/route-progress'
 import { localState } from '../state/local-state'
 import { useLocalStateSnapshot } from '../state/use-local-state'
+import { PageHeader, StateMessage } from '../components/PageHeader'
 
 function useRouteDetails(ids: string[]) {
   const { repository } = useAppData()
@@ -32,9 +33,9 @@ export function RoutesPage() {
   const routeRecords = state.status === 'ready' || state.status === 'empty' ? state.data.routes.routes : []
   const { results, retry } = useRouteDetails(routeRecords.map((route) => route.id))
   const completed = useMemo(() => new Set(local.nodeStates.filter((entry) => entry.completed).map((entry) => entry.node_id)), [local.nodeStates])
-  return <section className="atlas-page route-list-page"><p className="atlas-coordinate">PATHS / INDEX</p><h1 tabIndex={-1}>路线</h1>
-    {state.status === 'loading' && <p role="status">正在加载路线……</p>}
-    {routeRecords.length === 0 && state.status !== 'loading' && <div className="atlas-empty"><span>00</span><p>当前没有正式路线。</p></div>}
+  return <section className="atlas-page route-list-page"><PageHeader kicker="PATHS / INDEX" title="路线" summary="沿经过编排的知识路径前进，在当前位置继续，或从任一阶段重新进入。" />
+    {state.status === 'loading' && <StateMessage code="···" title="正在加载路线"><p role="status">正在读取路线结构与本地进度。</p></StateMessage>}
+    {routeRecords.length === 0 && state.status !== 'loading' && <StateMessage code="00" title="当前没有正式路线"><p>你仍可以从知识库或随机漫游开始探索。</p></StateMessage>}
     <ol className="route-index">{routeRecords.map((record) => {
       const result = results.find((entry) => entry.id === record.id)
       if (result?.error) return <li key={record.id}><span className="route-code">{record.code}</span><div><h2><Link to={`/route/${record.id}`}>{record.name}</Link></h2><p role="alert">{result.error}</p><button type="button" onClick={() => retry(record.id)}>重试加载路线</button></div></li>
@@ -43,7 +44,8 @@ export function RoutesPage() {
       const progress = routeProgress(route, completed)
       const position = local.routePositions.find((entry) => entry.route_id === route.id)
       const target = continueRoute(route, completed, position)
-      return <li key={route.id}><span className="route-code">{route.code}</span><div><h2><Link to={`/route/${route.id}`}>{route.name}</Link></h2><p>{route.summary}</p><p>{progress.completed} / {progress.total}</p><div className="route-line"><i style={{ transform: `scaleX(${progress.ratio})` }} /></div><Link to={target ? `/node/${target.unit.node_id}?source=route&route=${route.id}&stage=${target.stageId}&module=${target.moduleId}` : `/route/${route.id}`}>{progress.ratio === 1 ? '查看总结' : position ? '继续路线' : '开始路线'}</Link></div></li>
+      const currentUnit = route.stages.flatMap((stage) => stage.modules.flatMap((module) => module.units)).find((unit) => unit.node_id === position?.node_id)
+      return <li key={route.id} data-completed={progress.ratio === 1}><span className="route-code">{route.code}</span><div className="route-entry"><header><h2><Link to={`/route/${route.id}`}>{route.name}</Link></h2><span>{Math.round(progress.ratio * 100)}%</span></header><p className="route-summary">{route.summary}</p><div className="route-position"><span>当前位置</span><strong>{currentUnit?.title ?? (progress.ratio === 1 ? '路线完成' : '尚未开始')}</strong><span>下一节点</span><strong>{target?.unit.title ?? '查看路线总结'}</strong></div><div className="route-line" role="progressbar" aria-label={`${route.name}进度`} aria-valuenow={progress.completed} aria-valuemin={0} aria-valuemax={progress.total}><i style={{ transform: `scaleX(${progress.ratio})` }} /></div><footer><span>{progress.completed} / {progress.total} 个主线与综合任务</span><Link to={target ? `/node/${target.unit.node_id}?source=route&route=${route.id}&stage=${target.stageId}&module=${target.moduleId}` : `/route/${route.id}`}>{progress.ratio === 1 ? '查看总结' : position ? '继续路线' : '开始路线'}</Link></footer></div></li>
     })}</ol>
   </section>
 }
@@ -67,15 +69,15 @@ export function RouteDetailPage() {
   const position = local.routePositions.find((entry) => entry.route_id === route.id)
   const target = continueRoute(route, completed, position)
   const progress = routeProgress(route, completed)
-  return <section className="atlas-page route-detail-page"><p className="atlas-coordinate">{route.code} / PATH</p><h1 tabIndex={-1}>{route.name}</h1><p>{route.summary}</p>
-    <div className="route-overview"><strong>{progress.completed} / {progress.total}</strong><span>主线与综合任务</span>{target
+  return <section className="atlas-page route-detail-page"><PageHeader variant="context" kicker={`${route.code} / PATH`} title={route.name} summary={route.summary} meta={<><strong>{Math.round(progress.ratio * 100)}%</strong><span>路线完成度</span></>} actions={target
       ? <Link to={`/node/${target.unit.node_id}?source=route&route=${route.id}&stage=${target.stageId}&module=${target.moduleId}`}>继续路线</Link>
-      : <p>路线已完成。optional 未完成不影响 100%。</p>}</div>
-    <ol className="route-stages">{route.stages.map((stage, stageIndex) => <li key={stage.id}><p className="section-index">STAGE {String(stageIndex + 1).padStart(2, '0')}</p><h2>{stage.name}</h2><p>{stage.summary}</p>
-      {stage.modules.map((module) => <section key={module.id} className="route-module"><h3>{module.name}</h3><p>{module.summary}</p><ol>{[...module.units].sort((a, b) => a.order - b.order).map((unit) => {
+      : <span>路线已完成</span>} />
+    <div className="route-overview"><strong>{progress.completed} / {progress.total}</strong><span>主线与综合任务</span><div className="route-line" role="progressbar" aria-label="路线总进度" aria-valuenow={progress.completed} aria-valuemin={0} aria-valuemax={progress.total}><i style={{ transform: `scaleX(${progress.ratio})` }} /></div><p>可选节点不计入 100% 路线进度。</p></div>
+    <ol className="route-stages">{route.stages.map((stage, stageIndex) => <li key={stage.id}><header className="route-stage-header"><p className="section-index">STAGE {String(stageIndex + 1).padStart(2, '0')}</p><h2>{stage.name}</h2><p>{stage.summary}</p></header>
+      {stage.modules.map((module, moduleIndex) => <section key={module.id} className="route-module"><header><span>MODULE {String(moduleIndex + 1).padStart(2, '0')}</span><div><h3>{module.name}</h3><p>{module.summary}</p></div></header><ol>{[...module.units].sort((a, b) => a.order - b.order).map((unit) => {
         const done = completed.has(unit.node_id)
         const current = position?.node_id === unit.node_id
-        return <li key={unit.node_id} data-completed={done}><span>{String(unit.order).padStart(2, '0')}</span><div><p>{unit.role === 'core' ? '主线' : unit.role === 'optional' ? '可选' : '综合任务'}{current ? ' · 当前位置' : ''}{done ? ' · 已完成' : ''}</p><h4><Link to={`/node/${unit.node_id}?source=route&route=${route.id}&stage=${stage.id}&module=${module.id}`} onClick={() => { void localState.saveRoutePosition({ route_id: route.id, stage_id: stage.id, module_id: module.id, node_id: unit.node_id }) }}>{unit.title}</Link></h4><p>{unit.summary}</p></div></li>
+        return <li key={unit.node_id} data-completed={done} data-current={current} data-role={unit.role}><span className="route-unit-sequence">{String(unit.order).padStart(2, '0')}</span><div><div className="route-unit-meta"><span>{unit.role === 'core' ? 'CORE' : unit.role === 'optional' ? 'OPTIONAL' : 'SYNTHESIS'}</span>{current && <strong>当前位置</strong>}{done && <strong>已完成</strong>}</div><h4><Link to={`/node/${unit.node_id}?source=route&route=${route.id}&stage=${stage.id}&module=${module.id}`} onClick={() => { void localState.saveRoutePosition({ route_id: route.id, stage_id: stage.id, module_id: module.id, node_id: unit.node_id }) }}>{unit.title}</Link></h4><p>{unit.summary}</p></div></li>
       })}</ol></section>)}
     </li>)}</ol>
   </section>

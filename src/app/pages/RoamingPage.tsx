@@ -4,6 +4,8 @@ import type { CatalogRecord } from '../../content/types'
 import { useAppData } from '../data/app-data-context'
 import { pickRoaming, roamingEmptyReason, roamingPool } from '../data/roaming'
 import { useLocalStateSnapshot } from '../state/use-local-state'
+import { localState } from '../state/local-state'
+import { PageHeader, StateMessage } from '../components/PageHeader'
 
 const emptyMessages = {
   'no-content': '当前没有漫游内容。',
@@ -19,9 +21,9 @@ export function RoamingPage() {
   const pool = roamingPool(state.data.catalog.nodes, local.nodeStates)
   const reason = roamingEmptyReason(state.data.catalog.nodes, local.nodeStates)
   const select = (): void => setCurrent(pickRoaming(pool, current?.id))
-  return <section className="atlas-page roaming-page"><p className="atlas-coordinate">ROAMING / RANDOM</p><h1 tabIndex={-1}>随机漫游</h1><p>从未读且未标记不感兴趣的节点中安全随机抽取。打开节点不会自动标记已读。</p>
-    {reason && <div className="atlas-empty"><span>00</span><p>{emptyMessages[reason]} {reason === 'all-read' && <Link to="/me/completed">前往已读知识恢复</Link>}{reason === 'all-uninterested' && <Link to="/me/pending-removals">前往待删除撤销</Link>}</p></div>}
-    {!reason && <button className="roaming-pick" type="button" onClick={select}>{current ? '换一个' : '开始漫游'}</button>}
-    {current && pool.some((entry) => entry.id === current.id) && <article className="roaming-current"><p>{current.domain_name} / {current.course_name}</p><h2>{current.title}</h2><p>{current.summary}</p><Link to={`/node/${current.id}?source=roaming`}>打开节点</Link></article>}
+  return <section className="atlas-page roaming-page"><PageHeader variant="display" kicker="ROAM / RANDOM" title="随机漫游" summary="从未读且仍感兴趣的知识中，抽取一个意外入口。打开节点不会自动标记已读。" meta={<><strong>{pool.length}</strong><span>剩余节点</span></>} />
+    {reason && <StateMessage code="00" title={emptyMessages[reason]}>{reason === 'all-read' && <Link to="/me/completed">前往已读知识恢复</Link>}{reason === 'all-uninterested' && <Link to="/me/pending-removals">前往待删除撤销</Link>}</StateMessage>}
+    {!reason && <div className="roaming-console"><span>POOL / {pool.length}</span><button className="roaming-pick" type="button" onClick={select}>{current ? '换一个' : '抽取一个节点'}</button></div>}
+    {current && pool.some((entry) => entry.id === current.id) && <article className="roaming-current"><p className="section-index">DISCOVERED / {String(current.sequence).padStart(4, '0')}</p><p>{current.domain_name} / {current.course_name}</p><h2>{current.title}</h2><p>{current.summary}</p><div className="roaming-actions"><Link to={`/node/${current.id}?source=roaming`}>阅读这个节点</Link><button type="button" onClick={select}>换一个</button><button type="button" onClick={() => { void localState.setUninterested(current.id, '').then(() => setCurrent(undefined)) }}>不感兴趣</button></div></article>}
   </section>
 }
