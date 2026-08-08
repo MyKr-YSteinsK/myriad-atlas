@@ -64,6 +64,29 @@ describe('immersive reader', () => {
     expect(reader).not.toHaveClass('reader-code-wrap')
   })
 
+  it('binds the live preview to typography, font, theme and reset preferences', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter><ReaderPage node={previewNode} catalog={{ schema_version: 1, content_version: 'preview', nodes: [] }} /></MemoryRouter>)
+    await user.click(screen.getByRole('button', { name: '阅读设置' }))
+    const preview = screen.getByRole('group', { name: '阅读设置实时预览' }) as HTMLElement
+
+    fireEvent.change(screen.getByRole('slider', { name: '字号' }), { target: { value: '21' } })
+    fireEvent.change(screen.getByRole('slider', { name: '行间距' }), { target: { value: '2' } })
+    expect(preview.style.getPropertyValue('--reader-preview-font-size')).toBe('21px')
+    expect(preview.style.getPropertyValue('--reader-preview-line-height')).toBe('2')
+
+    await user.click(screen.getByLabelText('中文衬线字体'))
+    await user.click(screen.getByLabelText('深色'))
+    expect(preview).toHaveAttribute('data-font', 'serif')
+    expect(preview).toHaveAttribute('data-theme', 'dark')
+
+    await user.click(screen.getByRole('button', { name: '恢复默认' }))
+    expect(preview.style.getPropertyValue('--reader-preview-font-size')).toBe('18px')
+    expect(preview.style.getPropertyValue('--reader-preview-line-height')).toBe('1.75')
+    expect(preview).toHaveAttribute('data-font', 'system')
+    expect(preview).toHaveAttribute('data-theme', 'system')
+  })
+
   it('closes the settings dialog with Escape and restores trigger focus', async () => {
     const user = userEvent.setup()
     render(<MemoryRouter><ReaderPage node={previewNode} catalog={{ schema_version: 1, content_version: 'preview', nodes: [] }} /></MemoryRouter>)
