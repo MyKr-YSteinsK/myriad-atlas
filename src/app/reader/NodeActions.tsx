@@ -80,9 +80,9 @@ export function NodeActions({ node, catalog }: { node: RuntimeNode; catalog?: Ru
     }
   }
 
-  return <section className="node-actions" aria-labelledby="node-actions-title"><h2 id="node-actions-title">节点状态</h2>
+  return <section className="node-actions" aria-labelledby="node-actions-title"><p className="reader-section-label">PERSONAL STATE</p><h2 id="node-actions-title">阅读状态</h2>
     {error && <p role="alert">{error}</p>}
-    <div><button type="button" aria-pressed={Boolean(state?.completed)} onClick={() => run(() => localState.toggleCompleted(node.id))}>{node.domain_id === 'knowledge-roaming' ? state?.completed ? '取消已读' : '已读' : state?.completed ? '取消完成' : '完成'}</button>
+    <div className="node-action-primary"><button type="button" aria-pressed={Boolean(state?.completed)} onClick={() => run(() => localState.toggleCompleted(node.id))}>{node.domain_id === 'knowledge-roaming' ? state?.completed ? '取消已读' : '标记已读' : state?.completed ? '取消完成' : '标记完成'}</button>
       <button type="button" aria-pressed={Boolean(state?.favorite)} onClick={() => run(() => localState.toggleFavorite(node.id))}>{state?.favorite ? '取消收藏' : '收藏'}</button>
       <button type="button" aria-pressed={Boolean(state?.unknown)} onClick={() => {
         if (state?.unknown) run(async () => {
@@ -92,14 +92,15 @@ export function NodeActions({ node, catalog }: { node: RuntimeNode; catalog?: Ru
         })
         else { setNote(state?.unknown_note ?? ''); setUnknownOpen(true) }
       }}>{state?.unknown ? '取消不会／追问' : '不会／追问'}</button>
-      {node.domain_id === 'knowledge-roaming' && <button type="button" aria-pressed={Boolean(state?.uninterested)} onClick={() => {
+      </div>
+    {node.domain_id === 'knowledge-roaming' && <details className="node-action-secondary"><summary>更多操作</summary><button type="button" aria-pressed={Boolean(state?.uninterested)} onClick={() => {
         setUnknownOpen(false)
         run(async () => {
           if (!window.confirm('标记不感兴趣后将退出漫游和普通搜索，仍可在“待删除”中撤销。')) return
           await localState.markRoamingUninterested(node.id, '')
           navigate('/roaming')
         })
-      }}>不感兴趣</button>}</div>
+      }}>标记不感兴趣</button></details>}
     {undoNote !== undefined && <p role="status">已取消不会。<button type="button" onClick={() => { run(() => localState.undoClearUnknown(node.id, undoNote)); setUndoNote(undefined) }}>撤销</button></p>}
     {unknownOpen && <div className="node-action-dialog" role="dialog" aria-modal="true" aria-labelledby="unknown-title"><h3 id="unknown-title">不会／追问</h3><label>具体问题或备注<textarea value={note} maxLength={5000} onChange={(event) => setNote(event.target.value)} /></label><button type="button" onClick={() => { run(() => localState.setUnknown(node.id, note)); setUnknownOpen(false) }}>只保存不会</button><button type="button" onClick={() => { void createQuestionAndClose() }}>{node.qa ? '继续追问' : '新建问题链'}</button><button type="button" onClick={() => setUnknownOpen(false)}>取消</button></div>}
     <nav aria-label="下一节点">{source === 'route' && routeTarget && routeTarget.unit.node_id !== node.id && <Link to={`/node/${routeTarget.unit.node_id}?source=route&route=${route!.id}&stage=${routeTarget.stageId}&module=${routeTarget.moduleId}`}>下一节点：{routeTarget.unit.title}</Link>}{source === 'course' && courseNext && <Link to={`/node/${courseNext.id}?source=course&domain=${node.domain_id}&course=${node.course_id}`}>课程下一篇：{courseNext.title}</Link>}{source === 'roaming' && <Link to="/roaming">换一个</Link>}{(source === 'search' || source === 'home' || !source) && <Link to={source === 'search' ? '/search' : '/'}>返回来源</Link>}</nav>

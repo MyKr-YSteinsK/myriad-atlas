@@ -1,10 +1,17 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { ReaderPage } from '../../src/app/reader/ReaderPage'
 import { readerDb } from '../../src/app/state/reader-db'
 import { previewNode } from '../../src/app/reader/dev/fixture'
+import { localState } from '../../src/app/state/local-state'
+import type { CatalogRecord } from '../../src/content/types'
+
+const reference = (id: string, title: string): CatalogRecord => ({
+  id, title, domain_id: 'knowledge-roaming', domain_name: '知识漫游', course_id: 'knowledge-roaming-pool', course_name: '知识漫游池',
+  summary: '摘要', takeaways: [], tags: [], sequence: 2, source_path: `${id}.md`, kind: 'roaming', node_path: `_generated/nodes/${id}.json`, route_url: `#/node/${id}`,
+})
 
 describe('immersive reader', () => {
   beforeEach(async () => {
@@ -17,8 +24,8 @@ describe('immersive reader', () => {
   it('keeps body before takeaways and self-check answers collapsed by default', async () => {
     render(<MemoryRouter><ReaderPage node={previewNode} catalog={{ schema_version: 1, content_version: 'preview', nodes: [] }} /></MemoryRouter>)
     const body = document.querySelector('.reader-body')!
-    const takeaways = screen.getByRole('heading', { name: '要点' })
-    const actions = screen.getByRole('heading', { name: '节点状态' })
+    const takeaways = screen.getByRole('heading', { name: '要点回收' })
+    const actions = screen.getByRole('heading', { name: '阅读状态' })
     const details = screen.getByText('为什么答案默认折叠？').closest('details')!
 
     expect(body.compareDocumentPosition(takeaways) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -26,6 +33,18 @@ describe('immersive reader', () => {
     expect(details).not.toHaveAttribute('open')
     await userEvent.click(screen.getByText('为什么答案默认折叠？'))
     expect(details).toHaveAttribute('open')
+  })
+
+  it('opens the compact TOC, restores a saved anchor and keeps reference routes', async () => {
+    const scrollIntoView = vi.fn()
+    HTMLElement.prototype.scrollIntoView = scrollIntoView
+    await localState.saveReadingProgress(previewNode.id, .5, 'preview-code', previewNode.toc.map((entry) => entry.id))
+    render(<MemoryRouter><ReaderPage node={previewNode} catalog={{ schema_version: 1, content_version: 'preview', nodes: [reference('missing-preview-prerequisite', '前置样本'), reference('missing-preview-related', '关联样本')] }} /></MemoryRouter>)
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled())
+    await userEvent.click(screen.getByRole('button', { name: '目录' }))
+    expect(screen.getByText(/本文目录/).closest('details')).toHaveAttribute('open')
+    expect(screen.getByRole('link', { name: '前置样本' })).toHaveAttribute('href', '/node/missing-preview-prerequisite')
+    expect(screen.getByRole('link', { name: '关联样本' })).toHaveAttribute('href', '/node/missing-preview-related')
   })
 
   it('previews settings immediately and restores readable defaults', async () => {
