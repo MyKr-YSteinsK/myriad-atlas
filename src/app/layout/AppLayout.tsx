@@ -1,16 +1,25 @@
 import { useEffect } from 'react'
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { AtlasLink } from '../components/AtlasLink'
+import { Icon, type IconName } from '../components/Icon'
+import { canUseViewTransitions } from '../components/view-transitions'
 
 const navigation = [
-  { to: '/', label: '首页', end: true },
-  { to: '/routes', label: '路线' },
-  { to: '/library', label: '知识库' },
-  { to: '/roaming', label: '随机漫游' },
-  { to: '/me', label: '我的' },
+  { to: '/', label: '首页', icon: 'home', end: true },
+  { to: '/routes', label: '路线', icon: 'route' },
+  { to: '/library', label: '知识库', icon: 'library' },
+  { to: '/roaming', label: '随机漫游', icon: 'roam' },
+  { to: '/me', label: '我的', icon: 'me' },
 ]
 
-function AtlasIcon({ position }: { position: number }) {
-  return <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" /><path d={`M4 12h16M12 4v16M${7 + position} 8v8`} fill="none" stroke="currentColor" /></svg>
+function sectionName(pathname: string) {
+  if (pathname.startsWith('/route')) return '路线'
+  if (pathname.startsWith('/library')) return '知识库'
+  if (pathname.startsWith('/map')) return '知识航图'
+  if (pathname.startsWith('/roaming')) return '随机漫游'
+  if (pathname.startsWith('/search')) return '搜索'
+  if (pathname.startsWith('/me')) return '我的'
+  return '知识总览'
 }
 
 export function AppLayout() {
@@ -21,15 +30,15 @@ export function AppLayout() {
   return <div className="atlas-shell">
     <a className="skip-link" href="#main-content">跳到主要内容</a>
     <header className="atlas-topbar">
-      <p>万象回廊 · MyKr</p>
-      <Link className="atlas-search-link" to="/search?focus=1" aria-label="打开全文搜索">
-        <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" /><path d="m15.5 15.5 5 5" stroke="currentColor" /></svg>
-        <span>搜索</span>
-      </Link>
+      <AtlasLink className="atlas-brand" to="/" aria-label="返回万象回廊首页"><strong>MyKr</strong><span>万象回廊</span></AtlasLink>
+      <p className="atlas-context" aria-live="polite">{sectionName(location.pathname)}</p>
+      <AtlasLink className="atlas-search-link" to="/search?focus=1" aria-label="打开全文搜索">
+        <Icon name="search" /><span>搜索</span>
+      </AtlasLink>
     </header>
     <nav className="atlas-nav" aria-label="主要导航">
-      {navigation.map((item, index) => <NavLink key={item.to} to={item.to} end={item.end}>
-        {({ isActive }) => <><AtlasIcon position={index} /><span>{item.label}</span>{isActive && <i aria-hidden="true" />}</>}
+      {navigation.map((item) => <NavLink key={item.to} to={item.to} end={item.end} viewTransition={canUseViewTransitions()}>
+        {({ isActive }) => <><span className="atlas-nav-icon"><Icon name={item.icon as IconName} />{isActive && <i aria-hidden="true" />}</span><span>{item.label}</span></>}
       </NavLink>)}
     </nav>
     <main id="main-content" className="atlas-main" key={location.pathname}><Outlet /></main>

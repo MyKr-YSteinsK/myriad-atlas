@@ -8,6 +8,7 @@ import { RouteDetailPage, RoutesPage } from './pages/RoutePages'
 import { NodePage } from './pages/NodePage'
 import { AppLayout } from './layout/AppLayout'
 import { AppUpdateNotice } from '../pwa/AppUpdateNotice'
+import { StateMessage } from './components/PageHeader'
 
 const DevReaderPreview = import.meta.env.DEV ? lazy(() => import('./reader/dev/ReaderPreviewPage')) : undefined
 const SearchPage = lazy(async () => ({ default: (await import('./pages/SearchPage')).SearchPage }))
@@ -18,9 +19,9 @@ const StoragePage = lazy(async () => ({ default: (await import('./pages/OfflineP
 const BackupPage = lazy(async () => ({ default: (await import('./pages/OfflinePages')).BackupPage }))
 const QuestionsPage = lazy(async () => ({ default: (await import('./pages/QuestionPages')).QuestionsPage }))
 const QuestionDetailPage = lazy(async () => ({ default: (await import('./pages/QuestionPages')).QuestionDetailPage }))
-function LazyRoute({ children }: { children: ReactNode }) { return <Suspense fallback={<section className="atlas-page"><p role="status">正在打开……</p></section>}>{children}</Suspense> }
+function LazyRoute({ children }: { children: ReactNode }) { return <Suspense fallback={<section className="atlas-page"><StateMessage code="···" title="正在打开" ><p role="status">正在装配这一区域的知识索引。</p></StateMessage></section>}>{children}</Suspense> }
 function NotFoundPage() {
-  return <main className="app-shell"><h1>页面不存在</h1><p>这个地址不在知识航图中。</p></main>
+  return <section className="atlas-page"><StateMessage code="404" title="页面不存在"><p>这个地址不在知识航图中。</p></StateMessage></section>
 }
 
 export function App() {
