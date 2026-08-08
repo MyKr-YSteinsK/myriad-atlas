@@ -17,6 +17,7 @@ import { type ActiveContentPointer } from '../../pwa/cache-protocol'
 import { useAppUpdate } from '../../pwa/app-update-context'
 import { applyPersonalRestore, clearAllPersonalData, countCurrentPersonalData, exportPersonalBackup, getBackupReminderState, preparePersonalRestore, readPersonalBackupFile, setBackupReminderEnabled, type BackupReminderState, type PreparedRestore } from '../backup/personal-backup'
 import { shellSummary, updateSummary } from '../offline/offline-summary'
+import { PageHeader } from '../components/PageHeader'
 
 type Runtime = { storage: ContentCacheStorage; download: ContentDownloadManager; checker: KnowledgeUpdateChecker }
 
@@ -113,7 +114,7 @@ export function OfflinePage() {
   const knowledgeVersion = pointer?.content_version ?? (appData.state.status === 'ready' || appData.state.status === 'empty' ? appData.state.data.contentVersion : '未知版本')
   const filesPercent = job?.files_total ? Math.round(job.files_done / job.files_total * 100) : 0
   const bytesPercent = job?.payload_bytes_total ? Math.round(job.payload_bytes_done / job.payload_bytes_total * 100) : 0
-  return <section className="atlas-page offline-page"><p className="atlas-coordinate">LOCAL / OFFLINE</p><h1 tabIndex={-1}>离线与更新</h1>
+  return <section className="atlas-page offline-page"><PageHeader kicker="LOCAL / OFFLINE" title="离线与更新" summary="应用外壳与知识快照相互独立；完整验证后才会切换活动知识。" />
     <dl className="offline-overview offline-primary"><div><dt>应用</dt><dd>{shellSummary(appUpdate.state)}<small>版本 {APP_VERSION}</small></dd></div><div><dt>知识</dt><dd>{knowledgeVersion}<small>{pointer ? '已完整离线' : '尚未完整离线'}</small></dd></div><div><dt>更新</dt><dd>{updateSummary(check)}<small>{check?.status === 'cooldown' ? '近期已检查' : check?.status === 'update-available' ? '可下载更新' : ''}</small></dd></div></dl>
     {appUpdate.state.status === 'error' && <p className="offline-card" role="status">应用离线外壳注册失败。在线浏览仍可使用。</p>}
     {!runtime && <p role="status">此浏览器不支持 Cache Storage，无法提供完整离线知识。</p>}
@@ -144,7 +145,7 @@ export function VersionsPage() {
   const { state } = useAppData()
   if (state.status === 'loading') return <section className="atlas-page"><h1 tabIndex={-1}>版本日志</h1><p>正在加载……</p></section>
   if (state.status === 'error') return <section className="atlas-page"><h1 tabIndex={-1}>版本日志</h1><p role="alert">{state.error.message}</p></section>
-  return <section className="atlas-page versions-page"><p className="atlas-coordinate">RELEASE / LOG</p><h1 tabIndex={-1}>版本日志</h1>
+  return <section className="atlas-page versions-page"><PageHeader kicker="RELEASE / LOG" title="版本日志" summary="应用能力与知识内容分别发布、分别记录。" />
     <section><h2>应用版本</h2><p>当前应用：{APP_VERSION}</p><ol>{state.data.appChangelog.entries.map((entry) => <li key={`${entry.version}-${entry.date}`}><strong>{entry.version}{entry.version === APP_VERSION ? '（当前）' : ''}</strong><span>{entry.date}</span><p>{entry.summary}</p></li>)}</ol></section>
     <section><h2>知识版本</h2><p>当前运行知识：{state.data.contentVersion}</p><ol>{state.data.knowledgeChangelog.entries.map((entry) => <li key={`${entry.version}-${entry.date}`}><strong>{entry.version}{entry.version === state.data.contentVersion ? '（当前）' : ''}</strong><span>{entry.date}</span><p>{entry.summary}</p></li>)}</ol></section>
   </section>
@@ -178,7 +179,7 @@ export function StoragePage() {
     })()
     return () => { active = false }
   }, [runtime])
-  return <section className="atlas-page storage-page"><p className="atlas-coordinate">LOCAL / STORAGE</p><h1 tabIndex={-1}>存储与修复</h1>
+  return <section className="atlas-page storage-page"><PageHeader kicker="LOCAL / STORAGE" title="存储与修复" summary="检查浏览器空间、知识缓存与个人记录；活动知识不会被个人数据操作清除。" />
     <dl className="offline-overview"><div><dt>浏览器已用空间</dt><dd>{displayBytes(info?.usage)}</dd></div><div><dt>浏览器配额</dt><dd>{displayBytes(info?.quota)}</dd></div><div><dt>活动知识缓存</dt><dd>{displayBytes(info?.content)}</dd></div><div><dt>候选 / 孤儿缓存</dt><dd>{displayBytes(info?.candidates)}</dd></div><div><dt>个人 IndexedDB 记录</dt><dd>{local.nodeStates.length + local.questionChains.length + local.questionDrafts.length + local.pendingRemovals.length + local.opinions.length}</dd></div></dl>
     {verification && <p role="status">{verification.status}：{verification.message}</p>}{message && <p role="status">{message}</p>}
     <div className="offline-actions"><button type="button" disabled={!runtime} onClick={() => { if (runtime) void verifyActiveContent(runtime.storage).then(setVerification) }}>验证知识完整性</button><button type="button" disabled={!runtime} onClick={() => { if (runtime) void cleanupTemporaryContentCaches(runtime.storage).then((removed) => { setMessage(`已清理 ${removed.length} 个临时内容缓存。`); void refresh() }) }}>清理临时缓存</button><Link to="/me/offline">重新下载知识库</Link><Link to="/me/backups">备份与恢复</Link></div>
@@ -227,7 +228,7 @@ export function BackupPage() {
     if (!restoreReady && currentCount > 0) { setCurrentPersonalCount(currentCount); setMessage('请先成功启动当前数据的备份导出，再执行恢复。'); return }
     try { await applyPersonalRestore(prepared); setPrepared(undefined); setMessage('个人数据已恢复；离线知识保持不变。'); await refresh() } catch (reason) { setMessage(reason instanceof Error ? `恢复失败：${reason.message}` : '恢复失败，原数据未改变。') }
   }
-  return <section className="atlas-page backup-page"><p className="atlas-coordinate">LOCAL / BACKUP</p><h1 tabIndex={-1}>备份与恢复</h1><p>备份只包含个人状态，不包含可重新下载的正文、媒体、搜索索引、Cache Storage 或离线下载记录。</p>
+  return <section className="atlas-page backup-page"><PageHeader kicker="LOCAL / BACKUP" title="备份与恢复" summary="备份只包含不可重新下载的个人状态，不包含正文、媒体、搜索索引、Cache Storage 或离线下载记录。" />
     <dl className="offline-overview"><div><dt>节点状态</dt><dd>{local.nodeStates.length}</dd></div><div><dt>问题链 / 草稿</dt><dd>{local.questionChains.length} / {local.questionDrafts.length}</dd></div><div><dt>待删除 / 意见</dt><dd>{local.pendingRemovals.length} / {local.opinions.length}</dd></div><div><dt>应用 / 知识版本</dt><dd>{APP_VERSION} / {knowledgeVersion}</dd></div></dl>
     <div className="offline-actions"><button type="button" disabled={exporting} onClick={() => void exportBackup()}>{exporting ? '正在准备备份…' : '导出个人备份'}</button><button type="button" onClick={() => void setBackupReminderEnabled(!(reminder?.enabled ?? true)).then(() => void refresh())}>{reminder?.enabled === false ? '启用备份提醒' : '关闭备份提醒'}</button></div>
     {message && <p role="status">{message}</p>}

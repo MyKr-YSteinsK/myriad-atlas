@@ -10,6 +10,7 @@ import { APP_VERSION } from '../../lib/content-version'
 import { InstallGuidance } from '../../pwa/InstallGuidance'
 import { useAppUpdate, useUpdateFlush } from '../../pwa/app-update-context'
 import { BackupReminder } from '../offline/offline-hints'
+import { PageHeader, SectionHeader, StateMessage } from '../components/PageHeader'
 
 function useCatalog() {
   const { state } = useAppData()
@@ -50,11 +51,11 @@ export function MePage() {
     ['/me/pending-removals', '待删除', local.pendingRemovals.length],
     ['/me/opinions', '意见', local.opinions.length],
   ] as const
-  return <section className="atlas-page me-page"><p className="atlas-coordinate">LOCAL / ME</p><h1 tabIndex={-1}>我的</h1><ol>{entries.map(([to, label, count]) => <li key={to}><Link to={to}>{label}<span>{count}</span></Link></li>)}</ol>
+  return <section className="atlas-page me-page"><PageHeader kicker="LOCAL / ME" title="我的" summary="管理个人阅读状态、离线知识与本地数据。" meta={<><strong>{local.nodeStates.length}</strong><span>节点状态</span></>} /><section className="personal-index"><SectionHeader index="01 / STATE" title="个人状态" /><ol>{entries.map(([to, label, count], index) => <li key={to}><span>{String(index + 1).padStart(2, '0')}</span><Link to={to}>{label}<strong>{count}</strong></Link></li>)}</ol></section>
     <BackupReminder />
-    <section className="me-management"><h2>离线与数据</h2><ol><li><Link to="/me/offline">离线与更新</Link></li><li><Link to="/me/versions">版本日志</Link></li><li><Link to="/me/backups">备份与恢复</Link></li><li><Link to="/me/storage">存储与修复</Link></li></ol></section>
-    <section><h2>阅读设置</h2><p>{preferences.font === 'serif' ? '衬线' : '系统字体'} · {preferences.theme} · {preferences.fontSize}px</p>{storageWarning && <p role="status">阅读设置暂未写入本地。</p>}<button ref={settingsButton} type="button" onClick={() => setSettingsOpen(true)}>调整阅读设置</button></section>
-    <section className="app-management"><h2>应用与安装</h2><p>当前应用版本：{APP_VERSION}</p>
+    <section className="me-management"><SectionHeader index="02 / DATA" title="离线与数据" /><ol><li><Link to="/me/offline">离线与更新<span>知识下载与激活</span></Link></li><li><Link to="/me/versions">版本日志<span>应用与知识发布记录</span></Link></li><li><Link to="/me/backups">备份与恢复<span>个人数据 JSON</span></Link></li><li><Link to="/me/storage">存储与修复<span>空间与完整性</span></Link></li></ol></section>
+    <section className="me-reader-settings"><SectionHeader index="03 / READER" title="阅读设置" /><p>{preferences.font === 'serif' ? '衬线' : '系统字体'} · {preferences.theme} · {preferences.fontSize}px</p>{storageWarning && <p role="status">阅读设置暂未写入本地。</p>}<button ref={settingsButton} type="button" onClick={() => setSettingsOpen(true)}>调整阅读设置</button></section>
+    <section className="app-management"><SectionHeader index="04 / APP" title="应用与安装" /><p>当前应用版本：{APP_VERSION}</p>
       {appUpdate.state.status === 'offline-ready' && <p role="status">应用离线外壳已准备好。</p>}
       {appUpdate.state.status === 'update-available' && <p role="status">{appUpdate.state.targetVersion ? `新应用版本 ${appUpdate.state.targetVersion} 可用。` : '新应用版本可用。'}</p>}
       {appUpdate.state.status === 'error' && <p role="status">{appUpdate.state.error}</p>}
@@ -64,13 +65,13 @@ export function MePage() {
     <ReaderSettings open={settingsOpen} preferences={preferences} onChange={update} onReset={reset} onClose={() => setSettingsOpen(false)} triggerRef={settingsButton} />
   </section>
 }
-export function CompletedPage() { return <section className="atlas-page"><h1 tabIndex={-1}>已读 / 已完成</h1><StateList mode="completed" /></section> }
-export function FavoritesPage() { return <section className="atlas-page"><h1 tabIndex={-1}>收藏</h1><StateList mode="favorite" /></section> }
-export function UnknownPage() { return <section className="atlas-page"><h1 tabIndex={-1}>不会／追问</h1><StateList mode="unknown" /></section> }
+export function CompletedPage() { return <section className="atlas-page utility-list-page"><PageHeader kicker="LOCAL / COMPLETED" title="已读 / 已完成" /><StateList mode="completed" /></section> }
+export function FavoritesPage() { return <section className="atlas-page utility-list-page"><PageHeader kicker="LOCAL / FAVORITES" title="收藏" /><StateList mode="favorite" /></section> }
+export function UnknownPage() { return <section className="atlas-page utility-list-page"><PageHeader kicker="LOCAL / QUESTIONS" title="不会／追问" /><StateList mode="unknown" /></section> }
 
 export function PendingRemovalsPage() {
   const local = useLocalStateSnapshot()
-  return <section className="atlas-page"><h1 tabIndex={-1}>待删除</h1><p>下一次内容维护默认将这些记录转为物理删除批次；浏览器不会直接修改源码。</p><ol className="me-state-list">{local.pendingRemovals.map((entry) => <li key={entry.id}><p>{entry.kind}</p><h2>{entry.target_id}</h2><p>{entry.note || '无备注'} · {entry.created_at}</p><button type="button" onClick={() => {
+  return <section className="atlas-page utility-list-page"><PageHeader kicker="LOCAL / REMOVALS" title="待删除" summary="下一次内容维护默认将这些记录转为物理删除批次；浏览器不会直接修改源码。" />{local.pendingRemovals.length === 0 && <StateMessage code="00" title="没有待删除记录" />}<ol className="me-state-list">{local.pendingRemovals.map((entry) => <li key={entry.id}><p>{entry.kind}</p><h2>{entry.target_id}</h2><p>{entry.note || '无备注'} · {entry.created_at}</p><button type="button" onClick={() => {
     if (entry.kind === 'roaming-node') void localState.undoRoamingUninterested(entry.target_id)
     else if (entry.kind === 'qa-chain') void localState.undoHiddenQuestionChain(entry.target_id)
     else void localState.deletePendingRemoval(entry.id)
@@ -99,7 +100,7 @@ export function OpinionsPage() {
     const value = opinionText(values)
     try { await navigator.clipboard.writeText(value); setFallback('') } catch { setFallback(value) }
   }
-  return <section className="atlas-page opinions-page"><h1 tabIndex={-1}>意见</h1><div className="opinion-editor"><label>范围<select value={routeId} onChange={(event) => setRouteId(event.target.value)}><option value="">总体意见</option>{routes.map((route) => <option key={route.id} value={route.id}>{route.name}</option>)}</select></label><label>意见<textarea value={text} onChange={(event) => setText(event.target.value)} /></label><button type="button" onClick={() => void save()}>新增意见</button></div><div><button type="button" onClick={() => void copy(local.opinions)}>复制全部意见</button>{routes.map((route) => <button type="button" key={route.id} onClick={() => void copy(local.opinions.filter((entry) => entry.route_id === route.id))}>复制“{route.name}”意见</button>)}</div>{fallback && <textarea aria-label="手动复制意见" readOnly value={fallback} />}
+  return <section className="atlas-page opinions-page"><PageHeader kicker="LOCAL / NOTES" title="意见" summary="记录总体或路线意见，供后续内容维护集中处理。" /><div className="opinion-editor"><label>范围<select value={routeId} onChange={(event) => setRouteId(event.target.value)}><option value="">总体意见</option>{routes.map((route) => <option key={route.id} value={route.id}>{route.name}</option>)}</select></label><label>意见<textarea value={text} onChange={(event) => setText(event.target.value)} /></label><button type="button" onClick={() => void save()}>新增意见</button></div><div className="opinion-copy-actions"><button type="button" onClick={() => void copy(local.opinions)}>复制全部意见</button>{routes.map((route) => <button type="button" key={route.id} onClick={() => void copy(local.opinions.filter((entry) => entry.route_id === route.id))}>复制“{route.name}”意见</button>)}</div>{fallback && <textarea aria-label="手动复制意见" readOnly value={fallback} />}
     <ol className="me-state-list">{local.opinions.map((entry) => <li key={entry.id}><p>{entry.scope === 'route' ? routes.find((route) => route.id === entry.route_id)?.name ?? `${entry.route_id}（路线不可用）` : '总体'}</p><textarea value={entry.text} onChange={(event) => void localState.saveOpinion({ ...entry, text: event.target.value })} /><button type="button" onClick={() => void copy([entry])}>复制</button><button type="button" onClick={() => { if (window.confirm('删除这条意见？')) void localState.deleteOpinion(entry.id) }}>删除</button></li>)}</ol>
   </section>
 }

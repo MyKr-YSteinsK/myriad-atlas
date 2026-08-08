@@ -5,6 +5,7 @@ import { useAppData } from '../data/app-data-context'
 import { localState } from '../state/local-state'
 import type { QuestionDraft } from '../state/reader-db'
 import { useLocalStateSnapshot } from '../state/use-local-state'
+import { PageHeader, StateMessage } from '../components/PageHeader'
 
 function CopyRequest({ draft }: { draft: QuestionDraft }) {
   const [fallback, setFallback] = useState('')
@@ -25,12 +26,12 @@ export function QuestionsPage() {
   const local = useLocalStateSnapshot()
   const { state } = useAppData()
   const catalog = state.status === 'ready' || state.status === 'empty' ? state.data.catalog : undefined
-  return <section className="atlas-page questions-page"><p className="atlas-coordinate">QUESTIONS / CHAINS</p><h1 tabIndex={-1}>问题链</h1>
-    {local.questionChains.length === 0 && <div className="atlas-empty"><span>00</span><p>尚未建立问题链。可从任意阅读节点的“不会／追问”创建。</p></div>}
+  return <section className="atlas-page questions-page"><PageHeader kicker="QUESTIONS / CHAINS" title="问题链" summary="以来源知识为根，保留问题、追问与正式解答的研究脉络。" />
+    {local.questionChains.length === 0 && <StateMessage code="00" title="尚未建立问题链"><p>可从任意阅读节点的“不会／追问”创建。</p></StateMessage>}
     <ol>{[...local.questionChains].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).map((chain) => {
       const draft = [...local.questionDrafts].reverse().find((entry) => entry.chain_id === chain.chain_id)
       const source = catalog?.nodes.find((node) => node.id === chain.root_node_id)
-      return <li key={chain.chain_id}><p>{chain.chain_id} · {chain.status}</p><h2><Link to={`/me/questions/${chain.chain_id}`}>{source?.title ?? chain.root_node_id}</Link></h2><p>{draft?.question ?? '已导入正式解答'}</p></li>
+      return <li key={chain.chain_id}><div className="question-chain-meta"><span>{chain.chain_id}</span><strong>{chain.status}</strong></div><h2><Link to={`/me/questions/${chain.chain_id}`}>{source?.title ?? chain.root_node_id}</Link></h2><p>{draft?.question ?? '已导入正式解答'}</p></li>
     })}</ol>
   </section>
 }
@@ -44,11 +45,11 @@ export function QuestionDetailPage() {
   const formal = state.data.qaIndex.chains.find((entry) => entry.chain_id === chainId)
   const drafts = local.questionDrafts.filter((entry) => entry.chain_id === chainId)
   const source = state.data.catalog.nodes.find((entry) => entry.id === chain.root_node_id)
-  return <section className="atlas-page question-detail"><p className="atlas-coordinate">{chain.chain_id} / {chain.status}</p><h1 tabIndex={-1}>{source?.title ?? chain.root_node_id}</h1>
+  return <section className="atlas-page question-detail"><PageHeader variant="context" kicker={`${chain.chain_id} / ${chain.status}`} title={source?.title ?? chain.root_node_id} summary="沿时间顺序查看问题、追问与已导入的正式解答。" />
     {chain.status === 'id-conflict' && <p role="alert">预留 ID 已被不同来源链占用，已停止自动绑定。</p>}
     <ol className="question-timeline"><li><strong>来源</strong><p>{source?.title ?? chain.root_node_id}</p></li>{drafts.map((draft) => <li key={draft.draft_id}><strong>{draft.parent_node_id ? '追问' : '问题'}</strong><p>{draft.question}</p><small>{draft.status}</small>{draft.status === 'awaiting-import' && <CopyRequest draft={draft} />}</li>)}{formal?.answers.map((answer) => <li key={answer.node_id}><strong>正式解答</strong><p><Link to={`/node/${answer.node_id}`}>{answer.title}</Link></p></li>)}</ol>
-    <button type="button" onClick={() => {
+    <details className="question-danger-zone"><summary>问题链管理</summary><button type="button" onClick={() => {
       if (window.confirm(`隐藏整条链将影响 ${formal?.answers.length ?? 0} 篇正式答案；可在待删除中撤销。`)) void localState.hideQuestionChain(chain.chain_id, chain.root_node_id)
-    }}>本地隐藏整条链</button>
+    }}>本地隐藏整条链</button></details>
   </section>
 }
