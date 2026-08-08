@@ -64,6 +64,17 @@ describe('immersive reader', () => {
     expect(reader).not.toHaveClass('reader-code-wrap')
   })
 
+  it('closes the settings dialog with Escape and restores trigger focus', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter><ReaderPage node={previewNode} catalog={{ schema_version: 1, content_version: 'preview', nodes: [] }} /></MemoryRouter>)
+    const trigger = screen.getByRole('button', { name: '阅读设置' })
+    await user.click(trigger)
+    expect(screen.getByRole('dialog', { name: '阅读设置' })).toBeInTheDocument()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '阅读设置' })).not.toBeInTheDocument())
+    expect(trigger).toHaveFocus()
+  })
+
   it('flushes the latest reading position on pagehide and unmount', async () => {
     const view = render(<MemoryRouter><ReaderPage node={previewNode} catalog={{ schema_version: 1, content_version: 'preview', nodes: [] }} /></MemoryRouter>)
     fireEvent.scroll(window)

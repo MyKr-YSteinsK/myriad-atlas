@@ -1,6 +1,9 @@
 schema_version: 1
-current_version: 0.4.1
+current_version: 0.5.0
 entries:
+  - version: 0.5.0
+    date: 2026-08-08
+    summary: 重构知识探索、知识航图与沉浸阅读视觉，统一搜索、离线和个人数据界面，并完善响应式与可访问性。
   - version: 0.4.1
     date: 2026-08-07
     summary: 修复应用升级后旧离线知识的版本元数据冲突，并完善同知识版本的安全刷新与恢复。

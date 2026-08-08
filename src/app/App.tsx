@@ -8,7 +8,7 @@ import { RouteDetailPage, RoutesPage } from './pages/RoutePages'
 import { NodePage } from './pages/NodePage'
 import { AppLayout } from './layout/AppLayout'
 import { AppUpdateNotice } from '../pwa/AppUpdateNotice'
-import { StateMessage } from './components/PageHeader'
+import { PageHeader, StateMessage } from './components/PageHeader'
 
 const DevReaderPreview = import.meta.env.DEV ? lazy(() => import('./reader/dev/ReaderPreviewPage')) : undefined
 const SearchPage = lazy(async () => ({ default: (await import('./pages/SearchPage')).SearchPage }))
@@ -21,7 +21,7 @@ const QuestionsPage = lazy(async () => ({ default: (await import('./pages/Questi
 const QuestionDetailPage = lazy(async () => ({ default: (await import('./pages/QuestionPages')).QuestionDetailPage }))
 function LazyRoute({ children }: { children: ReactNode }) { return <Suspense fallback={<section className="atlas-page"><StateMessage code="···" title="正在打开" ><p role="status">正在装配这一区域的知识索引。</p></StateMessage></section>}>{children}</Suspense> }
 function NotFoundPage() {
-  return <section className="atlas-page"><StateMessage code="404" title="页面不存在"><p>这个地址不在知识航图中。</p></StateMessage></section>
+  return <section className="atlas-page"><PageHeader kicker="404 / OUTSIDE MAP" title="页面不存在" summary="这个地址不在知识航图中。" /></section>
 }
 
 export function App() {

@@ -84,10 +84,13 @@
 
 * { box-sizing: border-box; }
 html, body, #root { min-height: 100%; margin: 0; }
+html, body { overflow-x: clip; }
 body { min-width: 0; }
 body { color: var(--text-primary); background: var(--canvas); }
 ::selection { background: var(--selection); }
-button, input, select { font: inherit; }
+button, input, select, textarea { font: inherit; }
+button, summary { -webkit-tap-highlight-color: transparent; }
+button:not(:disabled), summary { cursor: pointer; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .atlas-main h1[tabindex='-1']:focus { outline: none; }
 .skip-link { background: var(--color-surface); color: var(--color-text); left: 1rem; padding: .75rem; position: fixed; top: -5rem; z-index: 20; }
@@ -202,7 +205,7 @@ button, input, select { font: inherit; }
 .site-header { border-bottom: 1px solid var(--color-line); padding-bottom: 1.5rem; }
 .site-kicker { color: var(--color-muted); font-size: .875rem; letter-spacing: .04em; margin: 0 0 .5rem; }
 h1, h2 { margin: 0; line-height: 1.2; }
-h1 { font-size: clamp(2rem, 6vw, 3.4rem); }
+h1 { font-size: clamp(1.9rem, 5vw, 2.8rem); }
 .initial-state, .message-state { padding-top: 4rem; }
 .initial-state p, .message-state p, .node-summary { color: var(--color-muted); line-height: 1.7; }
 .message-state button, .message-state a { display: inline-flex; align-items: center; min-height: 44px; margin: 1rem 1rem 0 0; color: var(--color-accent); background: transparent; border: 1px solid var(--color-line); border-radius: .3rem; padding: .5rem .8rem; text-decoration: none; cursor: pointer; }
