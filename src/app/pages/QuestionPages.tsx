@@ -6,6 +6,14 @@ import { localState } from '../state/local-state'
 import type { QuestionDraft } from '../state/reader-db'
 import { useLocalStateSnapshot } from '../state/use-local-state'
 import { PageHeader, StateMessage } from '../components/PageHeader'
+import { StateGlyph } from '../components/visual'
+
+function questionGlyph(status: string): 'completed' | 'current' | 'unknown' | 'unread' {
+  if (status === 'answered') return 'completed'
+  if (status === 'id-conflict' || status === 'hidden') return 'unknown'
+  if (status === 'draft') return 'current'
+  return 'unread'
+}
 
 function CopyRequest({ draft }: { draft: QuestionDraft }) {
   const [fallback, setFallback] = useState('')
@@ -31,7 +39,7 @@ export function QuestionsPage() {
     <ol>{[...local.questionChains].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).map((chain) => {
       const draft = [...local.questionDrafts].reverse().find((entry) => entry.chain_id === chain.chain_id)
       const source = catalog?.nodes.find((node) => node.id === chain.root_node_id)
-      return <li key={chain.chain_id}><div className="question-chain-meta"><span>{chain.chain_id}</span><strong>{chain.status}</strong></div><h2><Link to={`/me/questions/${chain.chain_id}`}>{source?.title ?? chain.root_node_id}</Link></h2><p>{draft?.question ?? '已导入正式解答'}</p></li>
+      return <li key={chain.chain_id}><div className="question-chain-meta"><span>{chain.chain_id}</span><div><StateGlyph state={questionGlyph(chain.status)} /><strong>{chain.status}</strong></div></div><h2><Link to={`/me/questions/${chain.chain_id}`}>{source?.title ?? chain.root_node_id}</Link></h2><p>{draft?.question ?? '已导入正式解答'}</p></li>
     })}</ol>
   </section>
 }

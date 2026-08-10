@@ -18,6 +18,7 @@ import { useAppUpdate } from '../../pwa/app-update-context'
 import { applyPersonalRestore, clearAllPersonalData, countCurrentPersonalData, exportPersonalBackup, getBackupReminderState, preparePersonalRestore, readPersonalBackupFile, setBackupReminderEnabled, type BackupReminderState, type PreparedRestore } from '../backup/personal-backup'
 import { shellSummary, updateSummary } from '../offline/offline-summary'
 import { PageHeader } from '../components/PageHeader'
+import { StateGlyph } from '../components/visual'
 
 type Runtime = { storage: ContentCacheStorage; download: ContentDownloadManager; checker: KnowledgeUpdateChecker }
 
@@ -47,6 +48,18 @@ function jobLabel(status: string): string {
 function activeJob(jobs: ReturnType<typeof useLocalStateSnapshot>['offlineJobs']) {
   return [...jobs].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).find((job) => job.status !== 'active')
     ?? [...jobs].sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0]
+}
+
+function shellGlyph(status: string): 'completed' | 'current' | 'unknown' {
+  if (status === 'offline-ready') return 'completed'
+  if (status === 'error') return 'unknown'
+  return 'current'
+}
+
+function updateGlyph(status: string | undefined): 'completed' | 'current' | 'unknown' {
+  if (status === 'update-available') return 'current'
+  if (status === 'error') return 'unknown'
+  return 'completed'
 }
 
 
@@ -115,7 +128,7 @@ export function OfflinePage() {
   const filesPercent = job?.files_total ? Math.round(job.files_done / job.files_total * 100) : 0
   const bytesPercent = job?.payload_bytes_total ? Math.round(job.payload_bytes_done / job.payload_bytes_total * 100) : 0
   return <section className="atlas-page offline-page"><PageHeader kicker="LOCAL / OFFLINE" title="离线与更新" summary="应用外壳与知识快照相互独立；完整验证后才会切换活动知识。" />
-    <dl className="offline-overview offline-primary"><div><dt>应用</dt><dd>{shellSummary(appUpdate.state)}<small>版本 {APP_VERSION}</small></dd></div><div><dt>知识</dt><dd>{knowledgeVersion}<small>{pointer ? '已完整离线' : '尚未完整离线'}</small></dd></div><div><dt>更新</dt><dd>{updateSummary(check)}<small>{check?.status === 'cooldown' ? '近期已检查' : check?.status === 'update-available' ? '可下载更新' : ''}</small></dd></div></dl>
+    <dl className="offline-overview offline-primary"><div><dt>应用</dt><dd><StateGlyph state={shellGlyph(appUpdate.state.status)} />{shellSummary(appUpdate.state)}<small>版本 {APP_VERSION}</small></dd></div><div><dt>知识</dt><dd><StateGlyph state={pointer ? 'completed' : 'unread'} />{knowledgeVersion}<small>{pointer ? '已完整离线' : '尚未完整离线'}</small></dd></div><div><dt>更新</dt><dd><StateGlyph state={updateGlyph(check?.status)} />{updateSummary(check)}<small>{check?.status === 'cooldown' ? '近期已检查' : check?.status === 'update-available' ? '可下载更新' : ''}</small></dd></div></dl>
     {appUpdate.state.status === 'error' && <p className="offline-card" role="status">应用离线外壳注册失败。在线浏览仍可使用。</p>}
     {!runtime && <p role="status">此浏览器不支持 Cache Storage，无法提供完整离线知识。</p>}
     {job && <section className="offline-card"><h2>{jobLabel(job.status)}</h2><p>{job.content_version} · {job.files_done} / {job.files_total} · {filesPercent}%</p><p>{displayBytes(job.payload_bytes_done)} / {displayBytes(job.payload_bytes_total)}（{bytesPercent}%）</p>{bytesPercent === 100 && job.status === 'failed' && <p>内容已传输，但仍有文件未通过验证。</p>}<p>建议预留空间：{displayBytes(Math.max(0, job.required_storage_bytes - job.payload_bytes_total))}</p>{job.error_message && <details><summary>查看错误详情</summary><p>下载未完成。有 1 个文件未通过验证。</p><p>{job.error_message}</p></details>}</section>}
@@ -146,8 +159,8 @@ export function VersionsPage() {
   if (state.status === 'loading') return <section className="atlas-page"><h1 tabIndex={-1}>版本日志</h1><p>正在加载……</p></section>
   if (state.status === 'error') return <section className="atlas-page"><h1 tabIndex={-1}>版本日志</h1><p role="alert">{state.error.message}</p></section>
   return <section className="atlas-page versions-page"><PageHeader kicker="RELEASE / LOG" title="版本日志" summary="应用能力与知识内容分别发布、分别记录。" />
-    <section><h2>应用版本</h2><p>当前应用：{APP_VERSION}</p><ol>{state.data.appChangelog.entries.map((entry) => <li key={`${entry.version}-${entry.date}`}><strong>{entry.version}{entry.version === APP_VERSION ? '（当前）' : ''}</strong><span>{entry.date}</span><p>{entry.summary}</p></li>)}</ol></section>
-    <section><h2>知识版本</h2><p>当前运行知识：{state.data.contentVersion}</p><ol>{state.data.knowledgeChangelog.entries.map((entry) => <li key={`${entry.version}-${entry.date}`}><strong>{entry.version}{entry.version === state.data.contentVersion ? '（当前）' : ''}</strong><span>{entry.date}</span><p>{entry.summary}</p></li>)}</ol></section>
+    <section><h2>应用版本</h2><p>当前应用：{APP_VERSION}</p><ol>{state.data.appChangelog.entries.map((entry) => <li key={`${entry.version}-${entry.date}`}><StateGlyph state={entry.version === APP_VERSION ? 'current' : 'unread'} /><strong>{entry.version}{entry.version === APP_VERSION ? '（当前）' : ''}</strong><span>{entry.date}</span><p>{entry.summary}</p></li>)}</ol></section>
+    <section><h2>知识版本</h2><p>当前运行知识：{state.data.contentVersion}</p><ol>{state.data.knowledgeChangelog.entries.map((entry) => <li key={`${entry.version}-${entry.date}`}><StateGlyph state={entry.version === state.data.contentVersion ? 'current' : 'unread'} /><strong>{entry.version}{entry.version === state.data.contentVersion ? '（当前）' : ''}</strong><span>{entry.date}</span><p>{entry.summary}</p></li>)}</ol></section>
   </section>
 }
 

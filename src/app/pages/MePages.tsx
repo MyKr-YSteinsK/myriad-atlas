@@ -11,6 +11,7 @@ import { InstallGuidance } from '../../pwa/InstallGuidance'
 import { useAppUpdate, useUpdateFlush } from '../../pwa/app-update-context'
 import { BackupReminder } from '../offline/offline-hints'
 import { PageHeader, SectionHeader, StateMessage } from '../components/PageHeader'
+import { MetricBar, StateGlyph } from '../components/visual'
 
 function useCatalog() {
   const { state } = useAppData()
@@ -36,6 +37,18 @@ function StateList({ mode }: { mode: 'completed' | 'favorite' | 'unknown' }) {
   })}</ol></>
 }
 
+function PersonalStateStrip({ completed, favorite, unknown, pending, total }: { completed: number; favorite: number; unknown: number; pending: number; total: number }) {
+  const values = [
+    { id: 'completed', state: 'completed' as const, label: '已完成', value: completed, tone: 'success' as const },
+    { id: 'favorite', state: 'favorite' as const, label: '收藏', value: favorite, tone: 'accent' as const },
+    { id: 'unknown', state: 'unknown' as const, label: '不会', value: unknown, tone: 'warning' as const },
+    { id: 'pending', state: 'roaming' as const, label: '待处理', value: pending, tone: 'danger' as const },
+  ]
+  return <section className="personal-state-strip" aria-label="个人状态概览">
+    {values.map((entry) => <div key={entry.id}><header><StateGlyph state={entry.state} /><span>{entry.label}</span><output>{entry.value}</output></header><MetricBar value={entry.value} max={Math.max(1, total)} label={entry.label} tone={entry.tone} showValue={false} /></div>)}
+  </section>
+}
+
 export function MePage() {
   const local = useLocalStateSnapshot()
   const appData = useAppData()
@@ -51,7 +64,12 @@ export function MePage() {
     ['/me/pending-removals', '待删除', local.pendingRemovals.length],
     ['/me/opinions', '意见', local.opinions.length],
   ] as const
-  return <section className="atlas-page me-page"><PageHeader kicker="LOCAL / ME" title="我的" summary="管理个人阅读状态、离线知识与本地数据。" meta={<><strong>{local.nodeStates.length}</strong><span>节点状态</span></>} /><section className="personal-index"><SectionHeader index="01 / STATE" title="个人状态" /><ol>{entries.map(([to, label, count], index) => <li key={to}><span>{String(index + 1).padStart(2, '0')}</span><Link to={to}>{label}<strong>{count}</strong></Link></li>)}</ol></section>
+  const completed = entries[0][2]
+  const favorite = entries[1][2]
+  const unknown = entries[2][2]
+  const pending = local.questionChains.length + local.pendingRemovals.length
+  const personalTotal = Math.max(1, local.nodeStates.length + pending)
+  return <section className="atlas-page me-page"><PageHeader kicker="LOCAL / ME" title="我的" meta={<span>{String(local.nodeStates.length) + ' STATES'}</span>} /><PersonalStateStrip completed={completed} favorite={favorite} unknown={unknown} pending={pending} total={personalTotal} /><section className="personal-index"><SectionHeader index="01 / STATE" title="个人状态" /><ol>{entries.map(([to, label, count], index) => <li key={to}><span>{String(index + 1).padStart(2, '0')}</span><Link to={to}>{label}<strong>{count}</strong></Link></li>)}</ol></section>
     <BackupReminder />
     <section className="me-management"><SectionHeader index="02 / DATA" title="离线与数据" /><ol><li><Link to="/me/offline">离线与更新<span>知识下载与激活</span></Link></li><li><Link to="/me/versions">版本日志<span>应用与知识发布记录</span></Link></li><li><Link to="/me/backups">备份与恢复<span>个人数据 JSON</span></Link></li><li><Link to="/me/storage">存储与修复<span>空间与完整性</span></Link></li></ol></section>
     <section className="me-reader-settings"><SectionHeader index="03 / READER" title="阅读设置" /><p>{preferences.font === 'serif' ? '衬线' : '系统字体'} · {preferences.theme} · {preferences.fontSize}px</p>{storageWarning && <p role="status">阅读设置暂未写入本地。</p>}<button ref={settingsButton} type="button" onClick={() => setSettingsOpen(true)}>调整阅读设置</button></section>
