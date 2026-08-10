@@ -10,7 +10,7 @@
 - `src/pwa/`：可安装外壳、Service Worker 注册/更新生命周期、安装指引、Cache Storage 活动版本指针与 Dexie UI 镜像协调。`download/` 管理暂停/继续、SHA-256 校验和版本化候选；`update/` 管理更新检查、原子激活、回滚、完整性修复与临时缓存清理。离线内容的活动版本始终以 Cache Storage pointer 为准，缺失文件不会回退网络；`knowledge-fingerprint.ts` 表示核心知识语义身份，`manifest_fingerprint` 表示完整 artifact/cache identity。
 - `src/app/backup/personal-backup.ts` 与 `schemas/backup/`：同源严格 Schema、稳定个人数据快照、iPhone 分享/下载导出、提醒、恢复预检和整套替换。恢复与清除不触及离线知识缓存。
 - `src/app/data/route-progress.ts`：路线进度与继续算法；`question-chains.ts`：QA ID、原子问题链创建、绑定和生成请求；`roaming.ts`：漫游池与安全随机；`knowledge-map-model.ts`：将图结构、目录、taxonomy 与路线索引严格 join 为航图 view model。
-- `src/app/components/` 与 `src/app/styles/global.css`：Atlas 页面标题、状态、图标、链接与语义视觉 token；Light / Dark / Warm 主题、safe area、响应式探索布局、阅读排版、焦点样式及减少动态效果均从这里进入。
+- `src/app/components/visual/`：可复用的 Atlas 图形信息语法（状态图形、阅读与路线轨道、比例条、指标带和确定性迷你航图）；`src/app/components/` 与 `src/app/styles/global.css`：页面标题、链接与语义视觉 token，以及 Light / Dark / Warm 主题、safe area、响应式探索布局、阅读排版、焦点样式和减少动态效果。
 
 ## 内容源与契约
 

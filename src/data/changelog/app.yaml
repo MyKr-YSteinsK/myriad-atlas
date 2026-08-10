@@ -1,6 +1,9 @@
 schema_version: 1
-current_version: 0.5.0
+current_version: 0.6.0
 entries:
+  - version: 0.6.0
+    date: 2026-08-10
+    summary: 建立 Atlas 图形信息语言，以节点、轨迹、比例与状态图形重构首页、路线、知识索引与次级页面，减少重复文字堆叠。
   - version: 0.5.0
     date: 2026-08-08
     summary: 重构知识探索、知识航图与沉浸阅读视觉，统一搜索、离线和个人数据界面，并完善响应式与可访问性。
