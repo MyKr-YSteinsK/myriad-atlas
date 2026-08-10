@@ -3,10 +3,11 @@ import { Link } from 'react-router-dom'
 import type { RuntimeRoute } from '../../content/types'
 import { useAppData } from '../data/app-data-context'
 import { continueRoute, resolveRecentRoute, routeProgress } from '../data/route-progress'
+import { buildRouteVisualUnits } from '../data/route-visual-state'
 import { useLocalStateSnapshot } from '../state/use-local-state'
 import { BackupReminder, OfflineHomeHint } from '../offline/offline-hints'
 import { PageHeader, StateMessage } from '../components/PageHeader'
-import { AtlasMiniMap, MetricBar, MetricStrip, MiniRoute, ProgressTrack, StateGlyph, type AtlasMiniMapNode, type RouteRole } from '../components/visual'
+import { AtlasMiniMap, MetricBar, MetricStrip, MiniRoute, ProgressTrack, StateGlyph, type AtlasMiniMapNode } from '../components/visual'
 import { homeMetricScale, resolveHomeAtlasAnchor } from '../data/home-origin'
 
 export function HomePage() {
@@ -45,8 +46,7 @@ export function HomePage() {
   const progress = recentRoute ? routeProgress(recentRoute, completed) : undefined
   const courseCount = taxonomy.domains.reduce((sum, domain) => sum + domain.courses.length, 0)
   const routeUnits = recentRoute?.stages.flatMap((stage) => stage.modules.flatMap((module) => module.units)) ?? []
-  const routeCurrentIndex = routeTarget ? routeUnits.findIndex((unit) => unit.node_id === routeTarget.unit.node_id) : undefined
-  const routeRoles: RouteRole[] = routeUnits.map((unit) => unit.role === 'anchor' ? 'synthesis' : unit.role)
+  const routeVisualUnits = buildRouteVisualUnits(routeUnits, completed, latestPosition)
   const anchor = resolveHomeAtlasAnchor(readingRecord?.id, recentRoute?.code)
   const atlasNodes: AtlasMiniMapNode[] = catalog.nodes.length === 0 ? [] : [
     { id: 'courses', label: String(courseCount) + ' COURSE', state: courseCount > 0 ? 'unread' : 'completed' },
@@ -70,13 +70,13 @@ export function HomePage() {
 
       <section className="home-current-action" aria-labelledby="home-current-title">
         {readingRecord && latestReading?.reading_progress ? <><header><div><StateGlyph state="current" announce={false} /><p className="atlas-coordinate">01 · CURRENT</p></div><output aria-label="当前阅读进度">{Math.round(latestReading.reading_progress.ratio * 100)}%</output></header><h2 id="home-current-title">{readingRecord.title}</h2><p className="home-current-coordinate">{readingRecord.course_name}</p><ProgressTrack variant="reading" ratio={latestReading.reading_progress.ratio} label={readingRecord.title + ' 阅读进度'} /><Link className="atlas-primary-link" to={'/node/' + readingRecord.id + '?source=home'}>继续阅读</Link></>
-          : recentRoute && progress ? <><header><div><StateGlyph state={progress.ratio === 1 ? 'completed' : 'current'} announce={false} /><p className="atlas-coordinate">01 · CURRENT</p></div><output aria-label="当前路线进度">{Math.round(progress.ratio * 100)}%</output></header><h2 id="home-current-title">{recentRoute.name}</h2><MiniRoute units={routeRoles.map((role) => ({ role }))} currentIndex={routeCurrentIndex} completed={progress.completed} label={recentRoute.name + ' 路线进度'} /><p className="home-current-coordinate">{routeTarget ? 'NEXT · ' + routeTarget.unit.title : 'ROUTE COMPLETE'}</p>{routeTarget ? <Link className="atlas-primary-link" to={'/node/' + routeTarget.unit.node_id + '?source=route&route=' + recentRoute.id + '&stage=' + routeTarget.stageId + '&module=' + routeTarget.moduleId}>继续</Link> : <Link className="atlas-primary-link" to={'/route/' + recentRoute.id}>查看总结</Link>}</>
+          : recentRoute && progress ? <><header><div><StateGlyph state={progress.ratio === 1 ? 'completed' : 'current'} announce={false} /><p className="atlas-coordinate">01 · CURRENT</p></div><output aria-label="当前路线进度">{Math.round(progress.ratio * 100)}%</output></header><h2 id="home-current-title">{recentRoute.name}</h2><MiniRoute units={routeVisualUnits} label={recentRoute.name + ' 路线进度'} /><p className="home-current-coordinate">{routeTarget ? 'NEXT · ' + routeTarget.unit.title : 'ROUTE COMPLETE'}</p>{routeTarget ? <Link className="atlas-primary-link" to={'/node/' + routeTarget.unit.node_id + '?source=route&route=' + recentRoute.id + '&stage=' + routeTarget.stageId + '&module=' + routeTarget.moduleId}>继续</Link> : <Link className="atlas-primary-link" to={'/route/' + recentRoute.id}>查看总结</Link>}</>
             : <div className="home-current-empty"><StateGlyph state="unread" announce={false} /><div><p className="atlas-coordinate">01 · CURRENT</p><h2 id="home-current-title">从索引开始</h2><p>还没有阅读足迹。</p><Link className="atlas-primary-link" to="/library">打开知识库</Link></div></div>}
       </section>
     </div>
 
     <div className="home-secondary-grid">
-      {recentRoute && progress && readingRecord && <section className="home-path" aria-labelledby="home-path-title"><header><p className="atlas-coordinate">02 · PATH</p><h2 id="home-path-title">{recentRoute.name}</h2></header><MiniRoute units={routeRoles.map((role) => ({ role }))} currentIndex={routeCurrentIndex} completed={progress.completed} label={recentRoute.name + ' 路线进度'} /><p>{routeTarget ? 'NEXT · ' + routeTarget.unit.title : 'ROUTE COMPLETE'}</p><Link to={routeTarget ? '/node/' + routeTarget.unit.node_id + '?source=route&route=' + recentRoute.id + '&stage=' + routeTarget.stageId + '&module=' + routeTarget.moduleId : '/route/' + recentRoute.id}>{progress.ratio === 1 ? '查看总结' : '继续'}</Link></section>}
+      {recentRoute && progress && readingRecord && <section className="home-path" aria-labelledby="home-path-title"><header><p className="atlas-coordinate">02 · PATH</p><h2 id="home-path-title">{recentRoute.name}</h2></header><MiniRoute units={routeVisualUnits} label={recentRoute.name + ' 路线进度'} /><p>{routeTarget ? 'NEXT · ' + routeTarget.unit.title : 'ROUTE COMPLETE'}</p><Link to={routeTarget ? '/node/' + routeTarget.unit.node_id + '?source=route&route=' + recentRoute.id + '&stage=' + routeTarget.stageId + '&module=' + routeTarget.moduleId : '/route/' + recentRoute.id}>{progress.ratio === 1 ? '查看总结' : '继续'}</Link></section>}
 
       <section className="home-roaming" aria-labelledby="home-roaming-title"><header><p className="atlas-coordinate">03 · ROAM</p><h2 id="home-roaming-title">漫游</h2></header><div className="home-roam-field" aria-label={'剩余 ' + String(remainingRoaming) + ' 个可漫游节点'}>{roaming.filter((node) => !stateByNodeId.get(node.id)?.uninterested).slice(0, 12).map((node) => <StateGlyph key={node.id} state={stateByNodeId.get(node.id)?.completed ? 'completed' : stateByNodeId.get(node.id)?.unknown ? 'unknown' : 'roaming'} />)}</div><MetricBar value={remainingRoaming} max={roaming.length} label="可漫游" tone="warning" /><Link to="/roaming">探索一个节点</Link>{remainingRoaming === 0 && roaming.length > 0 && <p><Link to="/me/completed">恢复已读</Link> · <Link to="/me/pending-removals">查看待删除</Link></p>}</section>
 

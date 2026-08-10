@@ -4,6 +4,7 @@ import { contentRepository } from '../../lib/content-client'
 import { MiniRoute, StateGlyph } from '../components/visual'
 import { buildKnowledgeMapViewModel, mapFilters, type KnowledgeMapViewModel } from '../data/knowledge-map-model'
 import { nodeVisualState } from '../data/node-visual-state'
+import { buildRouteVisualUnits } from '../data/route-visual-state'
 import { useLocalStateSnapshot } from '../state/use-local-state'
 import { PageHeader, StateMessage } from '../components/PageHeader'
 
@@ -31,6 +32,7 @@ export function KnowledgeMapPage() {
   }
   const nodes = useMemo(() => view?.nodes.filter((node) => (!filters.domain || node.domainId === filters.domain) && (!filters.course || node.courseId === filters.course)) ?? [], [filters, view])
   const states = useMemo(() => new Map(local.nodeStates.map((state) => [state.node_id, state])), [local.nodeStates])
+  const completed = useMemo(() => new Set(local.nodeStates.filter((state) => state.completed).map((state) => state.node_id)), [local.nodeStates])
   if (error) return <section className="atlas-page"><PageHeader kicker="MAP / KNOWLEDGE" title="知识航图" /><StateMessage code="!" title="航图无法建立" tone="error"><p role="alert">{error}</p></StateMessage></section>
   if (!view) return <section className="atlas-page"><PageHeader kicker="MAP / KNOWLEDGE" title="知识航图" /><StateMessage code="···" title="正在加载航图"><p role="status">正在连接图结构与知识目录。</p></StateMessage></section>
   const focused = view.nodes.find((node) => node.id === filters.node)
@@ -38,8 +40,7 @@ export function KnowledgeMapPage() {
   const related = focused ? view.edges.filter((edge) => edge.from === focused.id || edge.to === focused.id) : []
   const selectedRoute = view.routes.find((route) => route.id === filters.route)
   const routePosition = selectedRoute ? local.routePositions.find((position) => position.route_id === selectedRoute.id) : undefined
-  const routeCurrentIndex = selectedRoute ? selectedRoute.nodeIds.findIndex((id) => id === routePosition?.node_id) : undefined
-  const routeCompleted = selectedRoute?.nodeIds.filter((id) => states.get(id)?.completed).length ?? 0
+  const routeVisualUnits = buildRouteVisualUnits(selectedRoute?.nodeIds.map((node_id) => ({ node_id })) ?? [], completed, routePosition)
   const nodeTitles = new Map(view.nodes.map((node) => [node.id, node.title]))
   const nodeHref = (id: string) => {
     const query = new URLSearchParams({ map: '1' })
@@ -58,7 +59,7 @@ export function KnowledgeMapPage() {
         </div>
         {selectedRoute && <section className="knowledge-map-route" data-route={selectedRoute.id}>
           <header><strong>{selectedRoute.code}</strong><span>{selectedRoute.name}</span></header>
-          <MiniRoute count={selectedRoute.nodeIds.length} currentIndex={routeCurrentIndex === -1 ? undefined : routeCurrentIndex} completed={routeCompleted} label={selectedRoute.name + ' 路线叠层'} />
+          <MiniRoute units={routeVisualUnits} label={selectedRoute.name + ' 路线叠层'} />
           <small>{selectedRoute.summary}</small>
         </section>}
       </aside>

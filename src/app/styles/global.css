@@ -103,7 +103,7 @@ button:not(:disabled), summary { cursor: pointer; }
 .progress-track-reading { height: 2px; }
 .progress-track-route { background: transparent; height: 18px; overflow: visible; }
 .progress-track-route::before { background: var(--line-soft); content: ''; height: 2px; left: .45rem; position: absolute; right: .45rem; top: .5rem; }
-.progress-track-route .progress-track-fill { height: 2px; inset: .5rem .45rem auto; }
+.progress-track-route .progress-track-fill { display: none; }
 .progress-track-markers { display: grid; grid-template-columns: repeat(var(--route-marker-count), minmax(0, 1fr)); inset: 0; position: absolute; }
 .progress-track-marker { align-self: start; background: var(--canvas); border: 1.5px solid var(--line-strong); border-radius: 50%; height: .9rem; justify-self: center; position: relative; width: .9rem; z-index: 1; }
 .progress-track-marker[data-state='completed'] { background: var(--success); border-color: var(--success); }
