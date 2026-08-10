@@ -1,6 +1,9 @@
 schema_version: 1
-current_version: 0.6.0
+current_version: 0.6.1
 entries:
+  - version: 0.6.1
+    date: 2026-08-10
+    summary: 修正路线迷你轨道对当前位置、下一站、已完成节点与可选节点的状态表达。
   - version: 0.6.0
     date: 2026-08-10
     summary: 建立 Atlas 图形信息语言，以节点、轨迹、比例与状态图形重构首页、路线、知识索引与次级页面，减少重复文字堆叠。

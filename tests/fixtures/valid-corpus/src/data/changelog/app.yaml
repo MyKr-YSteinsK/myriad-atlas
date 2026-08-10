@@ -1,6 +1,9 @@
 schema_version: 1
-current_version: 0.6.0
+current_version: 0.6.1
 entries:
+  - version: 0.6.1
+    date: 2026-08-10
+    summary: Fixture mini route visual state fix.
   - version: 0.6.0
     date: 2026-08-10
     summary: Fixture Atlas visual release.
